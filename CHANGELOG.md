@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-31
+
+### Changed
+
+- The quick view shows the ticket summary and the recent thread (osTicket's last six entries) on one page instead of behind tabs. Older entries come folded and open on click, as in osTicket's own preview.
+
 ## [0.3.1] - 2026-10-31
 
 ### Changed
@@ -53,7 +59,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.1.0...v0.2.0

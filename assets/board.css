@@ -640,6 +640,29 @@
   overflow-x: auto;
 }
 
+/* Summary and thread on one page: the core preview's tab bar goes, the
+   thread shows under the summary, and the panel scrolls instead of the
+   thread's own 350px box. Collaborators stay in the ticket view. */
+.spb-preview #ticket-preview.tabs {
+  display: none;
+}
+
+.spb-preview #threadPreview.hidden {
+  display: block;
+}
+
+.spb-preview .thread-preview {
+  max-height: none;
+  overflow: visible;
+}
+
+.spb-thread-heading {
+  margin: 20px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--spb-muted);
+}
+
 .spb-note {
   margin: 0 0 16px;
 }

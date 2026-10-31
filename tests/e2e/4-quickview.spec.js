@@ -250,6 +250,32 @@ test.describe('admin', () => {
     await ctx.close();
   });
 
+  test('summary and thread on one page; older entries open and fold on click', async ({ page }) => {
+    const errors = watchErrors(page);
+    // A1 has the opening message, the seeded note and the note from the
+    // test above: three entries, so the third comes collapsed.
+    await openPanel(page, n.A1);
+    const preview = page.locator('.spb-preview');
+    await expect(preview.locator('#ticket-preview.tabs')).toBeHidden();
+    await expect(preview.locator('#preview')).toBeVisible();
+    await expect(preview.locator('.spb-thread-heading')).toHaveText('Thread');
+    await expect(preview.locator('#threadPreview')).toBeVisible();
+    const entries = preview.locator('.thread-preview-entry');
+    expect(await entries.count()).toBeGreaterThanOrEqual(3);
+
+    const folded = preview.locator('.thread-preview-entry.collapsed').first();
+    await expect(folded).toHaveCount(1);
+    const index = await folded.evaluate((el) => [...document.querySelectorAll('.spb-preview .thread-preview-entry')].indexOf(el));
+    const entry = entries.nth(index);
+    await entry.click();
+    await expect(entry).not.toHaveClass(/collapsed/);
+    await entry.locator('.header').click();
+    await expect(entry).toHaveClass(/collapsed/);
+
+    await page.screenshot({ path: path.join(LOCAL, 'screens', 'quickview-thread.png'), fullPage: false });
+    expect(errors).toEqual([]);
+  });
+
   test('act endpoint: CSRF, unknown action or value, unknown ticket', async ({ page }) => {
     expect((await post(page, ACT, `ticket_id=${t.A5}&act=claim`, false)).status).toBe(400);
     expect((await post(page, ACT, `ticket_id=${t.A5}&act=delete`)).status).toBe(422);

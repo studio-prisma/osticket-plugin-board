@@ -238,6 +238,10 @@ check('panel: picker entries escaped and bound to their act', strpos($panel, '<b
     && strpos($panel, 'data-spb-act="transfer" data-value="4"') !== false);
 check('panel: empty picker says so', strpos($panel, '<div class="spb-menu" data-menu="teams" hidden><p class="spb-hint">' . $strings['menu_empty']) !== false);
 check('panel: note field comes before the actions', strpos($panel, 'spb-note') < strpos($panel, 'spb-actions'));
+check('panel: thread gets a heading before the core thread block', BoardRenderer::threadHeading('<div id="preview">s</div><div class="hidden tab_content thread-preview" id="threadPreview">t</div>', 'Thread') === '<div id="preview">s</div><h3 class="spb-thread-heading">Thread</h3><div class="hidden tab_content thread-preview" id="threadPreview">t</div>');
+check('panel: thread heading escaped, only once, nothing without the block', strpos(BoardRenderer::threadHeading('<div id="threadPreview"></div>', '<b>$0</b>'), '&lt;b&gt;$0&lt;/b&gt;') !== false
+    && substr_count(BoardRenderer::threadHeading('<div id="threadPreview"></div><div id="threadPreview"></div>', 'T'), 'spb-thread-heading') === 1
+    && BoardRenderer::threadHeading('<div id="core">x</div>', 'T') === '<div id="core">x</div>');
 check('panel: core preview passed through unchanged', strpos($panel, '<div class="spb-preview"><div id="core">core</div></div>') !== false);
 check('panel: note form posts ticket id to the note route', strpos($panel, 'action="/scp/ajax.php/board/note"') !== false
     && strpos($panel, 'name="ticket_id" value="7"') !== false && strpos($panel, 'maxlength="' . BoardController::NOTE_MAX . '"') !== false);
