@@ -9,7 +9,8 @@ declare(strict_types=1);
  *
  *   Agent panel   Application::registerStaffApp() adds the entry under
  *                 "Applications". The ajax.scp signal of scp/ajax.php receives
- *                 /board, /board/move and /board/assets/*.
+ *                 /board, /board/move, /board/panel/{id}, /board/note and
+ *                 /board/assets/*.
  *   Client portal The ajax.client signal of ajax.php receives /board and
  *                 /board/assets/*. The navigation entry is placed into the
  *                 finished page by an output buffer (NavInjector), because
@@ -31,6 +32,7 @@ require_once INCLUDE_DIR . 'class.dispatcher.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/src/BoardModel.php';
 require_once __DIR__ . '/src/BoardRenderer.php';
+require_once __DIR__ . '/src/BoardActions.php';
 require_once __DIR__ . '/src/BoardI18n.php';
 require_once __DIR__ . '/src/NavInjector.php';
 require_once __DIR__ . '/src/BoardQuery.php';
@@ -110,6 +112,12 @@ class BoardPlugin extends Plugin
         }));
         $dispatcher->append(url_post('^/board/move$', static function () {
             return BoardController::staffMove();
+        }));
+        $dispatcher->append(url_get('^/board/panel/(\d+)$', static function ($tid) {
+            return BoardController::staffPanel($tid);
+        }));
+        $dispatcher->append(url_post('^/board/note$', static function () {
+            return BoardController::staffNote();
         }));
         $dispatcher->append(url_get('^/board/assets/(board\.css|board\.js)$', static function ($name) {
             return BoardController::asset((string) $name);

@@ -17,10 +17,15 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Which tickets | Exactly what the agent's departments, assignments and referrals allow (`Staff::getTicketsVisibility()`, same as the queues) | Own tickets, organisation tickets if the organisation shares them, collaborations if enabled (same three sources as the portal's ticket list) |
 | Filter | Any queue or saved search of the agent panel, picked above the board, remembered per session | No |
 | Change status | Drag and drop, or `Alt+←` / `Alt+→` on a focused card. Closing asks first | No |
+| Quick view | Click or `Enter` on a card: osTicket's ticket preview plus the actions the agent's role allows | No |
+| Actions | Status with comment, assign to agent or team, claim, release, transfer, refer, mark answered, change priority, add task: all through osTicket's own dialogs | No |
+| Internal note | From the quick view, as plain text | No |
 | Shown per card | Number, subject, requester, department, assignee, last update, overdue flag | Number, subject, department, last update |
 | Sub-tickets | Folded list under the parent, each with its own status | Same, limited to sub-tickets the client may see |
 
 **Filters are osTicket's own.** The board has no filter system of its own. The "View" picker lists the queues and saved searches the agent sees under Tickets, with the same access check (public queues, own private searches, never another agent's). Filters are created and saved where they always are: Tickets, then Search, then Save. The board applies their criteria and the same visibility rules as the ticket list. Sub-tickets the queue hides as rows still show up folded under their parent, limited to what the agent may see.
+
+**Actions are osTicket's own.** The quick view only offers what the ticket view would offer the same agent, and every button opens the same core dialog the ticket view opens (`scp/ajax.php/tickets/{id}/...`). Permissions, forms, alerts and the ticket history come from osTicket. The one write path of the plugin besides drag and drop is the internal note, which ends in the core's `Ticket::postNote()` and is stored as plain text.
 
 Sub-tickets are read from `ost_ticket.ticket_pid`. That's the column osTicket's merge feature and the common sub-ticket plugins write. No thread entries are loaded, so internal notes can't reach either board.
 
@@ -93,7 +98,10 @@ Not verified: osTicket 1.17, Nginx, MySQL instead of MariaDB, other portal theme
 - **One page, no paging.** The board shows at most "Maximum cards" tickets, newest activity first. A notice appears when tickets were left out.
 - **A moved card stays until reload.** If a status change takes a ticket out of the selected queue (say, closing it in "Open"), the card stays in its new column until the page is reloaded.
 - **Search criteria osTicket doesn't support are ignored**, on the board as in the ticket list. That's osTicket's behaviour for saved searches, not a filter of the plugin.
-- **Status only.** Dragging changes the status. Assignment, priority, department and order within a column aren't changed from the board.
+- **No reply to the customer from the board.** Replies stay in the ticket view (the quick view links to it). Mark as overdue, merge, link and the full edit form aren't offered either; they're one click away in the ticket view.
+- **The board reloads after a dialog action.** The quick view reopens for the same ticket.
+- **Notes from the board skip the ticket lock.** osTicket's lock only guards the ticket view's own forms against double posting; the note itself goes through the same `Ticket::postNote()`.
+- **Dragging changes the status only.** Assignment, priority and the rest go through the quick view. The order of cards within a column isn't stored.
 - **Children don't follow.** Moving a parent card changes the parent only. Sub-tickets keep their status.
 - **One level shown.** Deeper hierarchies are flattened under the top-most visible ancestor.
 - **Navigation entry depends on the portal markup.** It's placed after the last item of `<ul id="nav">`. A theme that replaces the header template without that list gets no link; the board stays reachable at `/ajax.php/board`.

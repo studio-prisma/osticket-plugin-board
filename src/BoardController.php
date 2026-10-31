@@ -107,6 +107,7 @@ final class BoardController
             'queue_missing' => $queueId > 0 && !$queue,
             'queue_action'  => ROOT_PATH . BoardPlugin::STAFF_BASE,
             'search_url'    => ROOT_PATH . 'scp/tickets.php',
+            'panel_url'     => ROOT_PATH . BoardPlugin::STAFF_BASE . '/panel/',
         ));
 
         return self::page('staff', $queue ? $strings['title'] . ': ' . $queue->getName() : $strings['title'], $html);
@@ -225,6 +226,162 @@ final class BoardController
     }
 
     // ------------------------------------------------------------------
+    // Quick view: /scp/ajax.php/board/panel/{id}, /scp/ajax.php/board/note
+    // ------------------------------------------------------------------
+
+    /** Upper bound for an internal note from the board, in characters. */
+    public const NOTE_MAX = 10000;
+
+    /**
+     * HTML fragment for the quick view. Unknown and invisible tickets get
+     * the same 404 as on the move endpoint.
+     */
+    public static function staffPanel($tid): string
+    {
+        global $thisstaff, $cfg;
+
+        if (!self::$settings['enable_staff'] || !($thisstaff instanceof Staff)) {
+            Http::response(404, 'Not found');
+            exit;
+        }
+        if (self::staffGated($thisstaff)) {
+            Http::response(403, 'Account action required');
+            exit;
+        }
+        $ticket = (int) $tid > 0 ? Ticket::lookup((int) $tid) : null;
+        if (!$ticket || !$ticket->checkStaffPerm($thisstaff)) {
+            Http::response(404, 'Not found');
+            exit;
+        }
+
+        $strings = BoardI18n::strings(self::language());
+        $statuses = array();
+        foreach (BoardQuery::statuses(1) as $s) {
+            $statuses[] = array('id' => $s['id'], 'name' => $s['name'], 'state' => $s['state']);
+        }
+        $actions = BoardActions::build(self::facts($ticket, $thisstaff), $statuses, $strings);
+
+        // The core preview template reads $ticket, $thisstaff and $cfg from
+        // the including scope, like TicketsAjaxAPI::previewTicket().
+        ob_start();
+        include STAFFINC_DIR . 'templates/ticket-preview.tmpl.php';
+        $preview = (string) ob_get_clean();
+
+        header('Cache-Control: no-store');
+        Http::response(200, BoardRenderer::panel(array(
+            'id'           => (int) $ticket->getId(),
+            'number'       => (string) $ticket->getNumber(),
+            'subject'      => (string) $ticket->getSubject(),
+            'ticket_url'   => ROOT_PATH . 'scp/tickets.php?id=' . (int) $ticket->getId(),
+            'note_url'     => ROOT_PATH . BoardPlugin::STAFF_BASE . '/note',
+            'actions'      => $actions,
+            'preview_html' => $preview,
+            'strings'      => $strings,
+        )), 'text/html');
+        exit;
+    }
+
+    /**
+     * Facts for BoardActions, read the way include/staff/ticket-view.inc.php
+     * reads them.
+     */
+    private static function facts($ticket, $staff): array
+    {
+        $role = $ticket->getRole($staff);
+        $dept = $ticket->getDept();
+        $isManager = $dept && $dept->isManager($staff);
+        $has = static function ($perm) use ($role) {
+            return $role && $role->hasPerm($perm);
+        };
+        $pf = $ticket->getPriorityField();
+
+        return array(
+            'id'                => (int) $ticket->getId(),
+            'status_id'         => (int) $ticket->getStatusId(),
+            'open'              => (bool) $ticket->isOpen(),
+            'assigned'          => (bool) $ticket->isAssigned(),
+            'has_staff'         => (bool) $ticket->getStaff(),
+            'closeable'         => $ticket->isCloseable() === true,
+            'answered'          => (bool) $ticket->isAnswered(),
+            'can_close'         => $has(Ticket::PERM_CLOSE),
+            'can_assign'        => $has(Ticket::PERM_ASSIGN),
+            'can_claim'         => $dept && (!$dept->assignMembersOnly() || $dept->isMember($staff)),
+            'can_release'       => $isManager || $has(Ticket::PERM_RELEASE),
+            'can_transfer'      => $has(Ticket::PERM_TRANSFER),
+            'can_refer'         => $has(Ticket::PERM_REFER),
+            'can_mark_answered' => $isManager || $has(Ticket::PERM_MARKANSWERED),
+            'can_edit'          => $has(Ticket::PERM_EDIT),
+            'priority_field_id' => $pf ? (int) $pf->getId() : 0,
+            'can_create_task'   => (bool) $ticket->checkStaffPerm($staff, Task::PERM_CREATE),
+        );
+    }
+
+    /**
+     * Internal note from the quick view. Goes through Ticket::postNote(),
+     * the method the ticket view's note form ends in. The text is stored as
+     * a TextThreadEntryBody (format "text"), so osTicket escapes it on
+     * display and no markup gets into the thread from here, whether or not
+     * rich text is enabled.
+     */
+    public static function staffNote(): string
+    {
+        global $thisstaff, $ost;
+
+        header('Cache-Control: no-store');
+        if (!self::$settings['enable_staff'] || !($thisstaff instanceof Staff)) {
+            return self::json(404, array('error' => 'not_found'));
+        }
+        if (self::staffGated($thisstaff)) {
+            return self::json(403, array('error' => 'account_action_required'));
+        }
+        if (!$ost || !$ost->checkCSRFToken()) {
+            return self::json(400, array('error' => 'csrf'));
+        }
+
+        $ticketId = (int) ($_POST['ticket_id'] ?? 0);
+        $ticket = $ticketId > 0 ? Ticket::lookup($ticketId) : null;
+        if (!$ticket || !$ticket->checkStaffPerm($thisstaff)) {
+            return self::json(404, array('error' => 'not_found'));
+        }
+
+        $text = self::noteText($_POST['note'] ?? '');
+        if ($text === null) {
+            return self::json(422, array('error' => 'invalid_note'));
+        }
+
+        $errors = array();
+        $note = $ticket->postNote(array(
+            'title' => '',
+            'note'  => new TextThreadEntryBody($text),
+        ), $errors, $thisstaff);
+        if (!$note) {
+            return self::json(422, array('error' => 'rejected'));
+        }
+        return self::json(200, array('ok' => true, 'ticket' => (int) $ticket->getId()));
+    }
+
+    /**
+     * Trimmed note text, or null if empty, too long or not a string. Public
+     * for the unit tests.
+     */
+    public static function noteText($raw): ?string
+    {
+        if (!is_string($raw)) {
+            return null;
+        }
+        $text = trim(str_replace("\r\n", "\n", $raw));
+        // preg with /u instead of mbstring: valid UTF-8 check and character
+        // count without depending on an optional extension.
+        if ($text === '' || !preg_match('//u', $text)) {
+            return null;
+        }
+        if (preg_match_all('/./su', $text) > self::NOTE_MAX) {
+            return null;
+        }
+        return $text;
+    }
+
+    // ------------------------------------------------------------------
     // Client portal: /ajax.php/board
     // ------------------------------------------------------------------
 
@@ -286,6 +443,15 @@ final class BoardController
 
         $assets = ROOT_PATH . ($panel === 'staff' ? BoardPlugin::STAFF_BASE : BoardPlugin::CLIENT_BASE) . '/assets/';
         $v = BoardAssets::version();
+
+        if ($panel === 'staff') {
+            // The page lives at scp/ajax.php/board, but the core header,
+            // footer and scp.js use paths relative to scp/ (ajax.php/i18n,
+            // the dialog forms' ajax.php/tickets/...). Without a base they'd
+            // resolve to scp/ajax.php/ajax.php/... The board's own links
+            // are absolute.
+            $ost->addExtraHeader(sprintf('<base href="%s" />', BoardRenderer::e(ROOT_PATH . 'scp/')));
+        }
 
         ob_start();
         if ($panel === 'staff') {

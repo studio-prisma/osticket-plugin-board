@@ -80,6 +80,9 @@ Als **Nicht-Admin**-Testagent:
 | 4.6 | Mit einer Rolle ohne Schließen-Recht: in geschlossenen Status ziehen und bestätigen | Fehlermeldung, Karte bleibt |
 | 4.7 | Unter „Ansicht" eine Queue wählen, z. B. „My Tickets", dann eine eigene gespeicherte Suche | Dieselben Tickets wie diese Queue oder Suche unter Tickets; die Auswahl bleibt nach Neuladen erhalten |
 | 4.8 | `/scp/ajax.php/board?queue=<ID der privaten Suche eines anderen Agenten>` öffnen | Hinweis „nicht verfügbar", volles Standard-Board, nichts aus dieser Suche sichtbar |
+| 4.9 | Karte anklicken | Schnellansicht mit Ticket-Vorschau und nur den Aktionen, die die Rolle des Agenten erlaubt |
+| 4.10 | In der Schnellansicht: An Agent zuweisen, jemanden wählen, bestätigen | Zuweisungs-Dialog von osTicket; Board lädt neu, Schnellansicht zeigt die neue Zuweisung, die Ticket-Historie listet sie |
+| 4.11 | Interne Notiz mit `<b>test</b>` speichern | Notiz in der Ticketansicht als wörtlicher Text, nicht fett; im Kundenportal nicht sichtbar |
 
 Abbruch, wenn: 4.3 ein Ticket zeigt, das der Agent in der normalen Ticketansicht nicht öffnen kann. Instanz deaktivieren und melden (siehe SECURITY.md).
 

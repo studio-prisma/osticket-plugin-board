@@ -17,10 +17,15 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 | Welche Tickets | Genau das, was Abteilungen, Zuweisungen und Weiterleitungen des Agenten erlauben (`Staff::getTicketsVisibility()`, wie in den Queues) | Eigene Tickets, Tickets der Organisation, wenn die Organisation sie teilt, und Mitwirkungen, wenn aktiviert (dieselben drei Quellen wie die Ticketliste im Portal) |
 | Filter | Jede Queue und gespeicherte Suche des Agenten-Panels, über dem Board auswählbar, pro Sitzung gemerkt | Nein |
 | Status ändern | Drag and Drop, oder `Alt+←` / `Alt+→` auf einer fokussierten Karte. Vor dem Schließen kommt eine Rückfrage | Nein |
+| Schnellansicht | Klick oder `Enter` auf eine Karte: die Ticket-Vorschau von osTicket plus die Aktionen, die die Rolle des Agenten erlaubt | Nein |
+| Aktionen | Status mit Kommentar, an Agent oder Team zuweisen, übernehmen, freigeben, an Abteilung übergeben, weiterleiten, als beantwortet markieren, Priorität ändern, Aufgabe anlegen: alles über die Dialoge von osTicket | Nein |
+| Interne Notiz | Aus der Schnellansicht, als Klartext | Nein |
 | Pro Karte | Nummer, Betreff, Anfragende Person, Abteilung, Zuweisung, letzte Änderung, Überfällig-Markierung | Nummer, Betreff, Abteilung, letzte Änderung |
 | Unter-Tickets | Eingeklappte Liste unter dem Eltern-Ticket, jeweils mit eigenem Status | Ebenso, beschränkt auf Unter-Tickets, die der Kunde sehen darf |
 
 **Die Filter sind die von osTicket.** Das Board hat kein eigenes Filtersystem. Die Auswahl „Ansicht" listet die Queues und gespeicherten Suchen, die der Agent unter Tickets sieht, mit derselben Zugriffsprüfung (öffentliche Queues, eigene private Suchen, nie die eines anderen Agenten). Filter legt man an und speichert sie dort, wo man es gewohnt ist: Tickets, dann Suche, dann Speichern. Das Board übernimmt ihre Kriterien und dieselben Sichtbarkeitsregeln wie die Ticketliste. Unter-Tickets, die eine Queue als Zeilen ausblendet, erscheinen trotzdem eingeklappt unter dem Eltern-Ticket, beschränkt auf das, was der Agent sehen darf.
+
+**Die Aktionen sind die von osTicket.** Die Schnellansicht bietet nur an, was die Ticketansicht demselben Agenten anbieten würde, und jeder Button öffnet denselben Core-Dialog wie die Ticketansicht (`scp/ajax.php/tickets/{id}/...`). Rechte, Formulare, Benachrichtigungen und Ticket-Historie kommen aus osTicket. Der einzige eigene Schreibweg des Plugins neben Drag and Drop ist die interne Notiz. Sie endet im `Ticket::postNote()` des Cores und wird als Klartext gespeichert.
 
 Unter-Tickets kommen aus `ost_ticket.ticket_pid`. In diese Spalte schreiben die Merge-Funktion von osTicket und die gängigen Unter-Ticket-Plugins. Thread-Einträge werden nie geladen, interne Notizen können also auf keinem der beiden Boards landen.
 
@@ -93,7 +98,10 @@ Nicht geprüft: osTicket 1.17, Nginx, MySQL statt MariaDB, andere Portal-Themes 
 - **Eine Seite, kein Blättern.** Das Board zeigt höchstens „Maximum cards" Tickets, neueste Aktivität zuerst. Fehlen Tickets, erscheint ein Hinweis.
 - **Eine verschobene Karte bleibt bis zum Neuladen.** Fällt ein Ticket durch den Statuswechsel aus der gewählten Queue (etwa beim Schließen in „Open"), bleibt die Karte bis zum Neuladen in ihrer neuen Spalte.
 - **Suchkriterien, die osTicket nicht unterstützt, werden ignoriert**, auf dem Board wie in der Ticketliste. Das ist das Verhalten von osTicket bei gespeicherten Suchen, kein Filter des Plugins.
-- **Nur der Status.** Ziehen ändert den Status. Zuweisung, Priorität, Abteilung und Reihenfolge innerhalb einer Spalte ändert das Board nicht.
+- **Keine Antwort an Kunden aus dem Board.** Antworten bleiben in der Ticketansicht (die Schnellansicht verlinkt dorthin). Als überfällig markieren, zusammenführen, verknüpfen und das komplette Bearbeiten-Formular gibt es ebenfalls nicht, sie sind einen Klick entfernt in der Ticketansicht.
+- **Nach einer Dialog-Aktion lädt das Board neu.** Die Schnellansicht öffnet sich wieder für dasselbe Ticket.
+- **Notizen aus dem Board übergehen den Ticket-Lock.** Der Lock von osTicket schützt nur die Formulare der Ticketansicht vor doppeltem Absenden; die Notiz selbst läuft über dasselbe `Ticket::postNote()`.
+- **Ziehen ändert nur den Status.** Zuweisung, Priorität und der Rest laufen über die Schnellansicht. Die Reihenfolge der Karten innerhalb einer Spalte wird nicht gespeichert.
 - **Kinder ziehen nicht mit.** Eine Eltern-Karte zu verschieben ändert nur das Eltern-Ticket. Unter-Tickets behalten ihren Status.
 - **Eine Ebene sichtbar.** Tiefere Hierarchien werden unter dem obersten sichtbaren Vorfahren zusammengefasst.
 - **Der Navigationseintrag hängt am Portal-Markup.** Er kommt hinter den letzten Eintrag von `<ul id="nav">`. Ein Theme, das das Header-Template ohne diese Liste ersetzt, bekommt keinen Link. Das Board bleibt unter `/ajax.php/board` erreichbar.

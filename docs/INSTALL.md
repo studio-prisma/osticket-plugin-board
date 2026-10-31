@@ -80,6 +80,9 @@ As the **non-admin** test agent:
 | 4.6 | With a role that may not close tickets: drag to a closed status and confirm | Error message, card stays |
 | 4.7 | Pick a queue under "View", e.g. "My Tickets", then one of your saved searches | Same tickets as that queue or search under Tickets; the choice is still set after reload |
 | 4.8 | Open `/scp/ajax.php/board?queue=<ID of another agent's private search>` | Notice "not available", full default board, nothing of that search shown |
+| 4.9 | Click a card | Quick view with the ticket preview and only the actions the agent's role allows |
+| 4.10 | In the quick view: Assign to agent, pick someone, confirm | osTicket's assign dialog; board reloads, quick view shows the new assignee, ticket history lists the assignment |
+| 4.11 | Post an internal note with `<b>test</b>` | Note in the ticket view as literal text, not bold; not visible in the client portal |
 
 Stop if: 4.3 shows a ticket the agent can't open in the normal ticket view. Disable the instance and report it (see SECURITY.md).
 

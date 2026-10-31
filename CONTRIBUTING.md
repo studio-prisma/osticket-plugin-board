@@ -50,7 +50,8 @@ CI runs syntax and unit tests on PHP 8.0 to 8.4, plus the full end-to-end suite,
 - **PHP 8.0 compatible.** No `match`, no enums, no readonly properties, no named arguments. CI lints on 8.0.
 - **No runtime dependencies.** No Composer packages, no JavaScript library, nothing from a CDN. The board loads two files of its own.
 - **Visibility comes from osTicket.** Agent queries go through `Staff::getTicketsVisibility()`. Client queries mirror `include/client/tickets.inc.php`. Don't write a third rule.
-- **One escaping point.** Ticket data reaches HTML only through `BoardRenderer::e()`. The JavaScript moves existing nodes and sets `textContent`; it never builds markup from data.
+- **One escaping point.** Ticket data reaches HTML only through `BoardRenderer::e()`. The JavaScript moves existing nodes and sets `textContent`; it never builds markup from data. The one `innerHTML` is the quick-view panel, which the server renders completely: its own parts through `e()`, the ticket preview through osTicket's template, which escapes its own data.
+- **Actions go through osTicket.** New quick-view actions open a core dialog under `scp/ajax.php/tickets/{id}/...` and get their visibility condition from `include/staff/ticket-view.inc.php`. A new write endpoint in the plugin needs a reason in the PR why no core dialog does the job.
 - **No hardcoded hostnames, credentials, absolute paths or customer data**, tests included. The test stack generates its passwords at runtime.
 - **Every new setting** needs a clamp in `BoardController::normalise()`, a unit test, and a row in the configuration table of both READMEs.
 

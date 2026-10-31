@@ -169,6 +169,63 @@ check('queue: junk is the default view, not remembered', BoardController::select
     && BoardController::selectedQueueId(array('queue' => '-3'), $session) === 0
     && $session === array());
 
+// ------------------------------------------------------------ quick view
+
+$statusList = array(
+    array('id' => 1, 'name' => 'Open', 'state' => 'open'),
+    array('id' => 6, 'name' => 'In Progress', 'state' => 'open'),
+    array('id' => 3, 'name' => 'Closed', 'state' => 'closed'),
+);
+$all = array('id' => 7, 'status_id' => 1, 'open' => true, 'assigned' => false, 'has_staff' => false,
+    'closeable' => true, 'answered' => false, 'can_close' => true, 'can_assign' => true, 'can_claim' => true,
+    'can_release' => true, 'can_transfer' => true, 'can_refer' => true, 'can_mark_answered' => true,
+    'can_edit' => true, 'priority_field_id' => 22, 'can_create_task' => true);
+$paths = fn($facts) => array_column(BoardActions::build($facts, $statusList, $strings), 'path');
+
+check('actions: full role on an open, unassigned ticket', $paths($all) === array(
+    'tickets/7/status/reopen/6', 'tickets/7/status/close/3',
+    'tickets/7/assign/agents', 'tickets/7/assign/teams', 'tickets/7/claim',
+    'tickets/7/transfer', 'tickets/7/refer',
+    'tickets/7/mark/answered', 'tickets/7/field/22/edit', 'tickets/7/add-task'));
+$none = array_merge($all, array('can_close' => false, 'can_assign' => false, 'can_claim' => false,
+    'can_release' => false, 'can_transfer' => false, 'can_refer' => false, 'can_mark_answered' => false,
+    'can_edit' => false, 'can_create_task' => false));
+check('actions: view-only role gets none', $paths($none) === array());
+check('actions: not closeable hides closed states only', !in_array('tickets/7/status/close/3', $paths(array_merge($all, array('closeable' => false))), true)
+    && in_array('tickets/7/status/reopen/6', $paths(array_merge($all, array('closeable' => false))), true));
+$assigned = $paths(array_merge($all, array('assigned' => true, 'has_staff' => true, 'answered' => true)));
+check('actions: assigned ticket offers release, no claim, mark unanswered', in_array('tickets/7/release', $assigned, true)
+    && !in_array('tickets/7/claim', $assigned, true) && in_array('tickets/7/mark/unanswered', $assigned, true));
+$closedT = $paths(array_merge($all, array('open' => false, 'status_id' => 3)));
+check('actions: closed ticket, no assign or mark, reopen offered', !preg_grep('#/assign/|/mark/|/claim#', $closedT)
+    && in_array('tickets/7/status/reopen/1', $closedT, true) && !in_array('tickets/7/status/close/3', $closedT, true));
+check('actions: no priority field, no priority action', !in_array('tickets/7/field/0/edit', $paths(array_merge($all, array('priority_field_id' => 0))), true));
+
+$panel = BoardRenderer::panel(array('id' => 7, 'number' => '00<7>', 'subject' => '<img src=x onerror=1>',
+    'ticket_url' => '/scp/tickets.php?id=7', 'note_url' => '/scp/ajax.php/board/note',
+    'actions' => BoardActions::build($all, $statusList, $strings), 'preview_html' => '<div id="core">core</div>',
+    'strings' => $strings));
+check('panel: ticket data escaped', strpos($panel, '<img') === false && strpos($panel, '#00&lt;7&gt; &lt;img') !== false);
+check('panel: actions as buttons with core dialog paths', substr_count($panel, 'class="spb-action"') === 10
+    && strpos($panel, 'data-spb-dialog="tickets/7/assign/agents"') !== false);
+check('panel: core preview passed through unchanged', strpos($panel, '<div class="spb-preview"><div id="core">core</div></div>') !== false);
+check('panel: note form posts ticket id to the note route', strpos($panel, 'action="/scp/ajax.php/board/note"') !== false
+    && strpos($panel, 'name="ticket_id" value="7"') !== false && strpos($panel, 'maxlength="' . BoardController::NOTE_MAX . '"') !== false);
+check('panel: empty groups are left out', strpos(BoardRenderer::panel(array_merge(array('id' => 7, 'number' => '1', 'subject' => 's',
+    'ticket_url' => '/', 'note_url' => '/', 'preview_html' => '', 'strings' => $strings), array('actions' => array()))), 'spb-action-group') === false);
+
+check('note: trimmed text accepted', BoardController::noteText("  hello\r\nworld  ") === "hello\nworld");
+check('note: empty, whitespace, non-string refused', BoardController::noteText('') === null
+    && BoardController::noteText(" \n ") === null && BoardController::noteText(array('x')) === null && BoardController::noteText(null) === null);
+check('note: length cap', BoardController::noteText(str_repeat('a', BoardController::NOTE_MAX)) !== null
+    && BoardController::noteText(str_repeat('a', BoardController::NOTE_MAX + 1)) === null);
+check('note: invalid UTF-8 refused', BoardController::noteText("ok \xC3\x28") === null);
+
+$html = BoardRenderer::render(BoardModel::build($statuses, array(row(1, 1))), array_merge($pickerCtx, array('panel_url' => '/scp/ajax.php/board/panel/')));
+check('board: panel URL and empty drawer only with panel_url', strpos($html, 'data-panel-url="/scp/ajax.php/board/panel/"') !== false
+    && strpos($html, '<aside class="spb-drawer" hidden') !== false
+    && strpos(BoardRenderer::render(BoardModel::build($statuses, array()), $pickerCtx), 'spb-drawer') === false);
+
 // --------------------------------------------------------------- settings
 
 $n = BoardController::normalise(array());

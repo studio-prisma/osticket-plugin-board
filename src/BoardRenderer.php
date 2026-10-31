@@ -33,8 +33,14 @@ final class BoardRenderer
                     'confirm_close' => $t['confirm_close'],
                     'move_failed'   => $t['move_failed'],
                     'moved'         => $t['moved'],
+                    'panel_failed'  => $t['panel_failed'],
+                    'note_saved'    => $t['note_saved'],
+                    'note_failed'   => $t['note_failed'],
                 ), JSON_UNESCAPED_UNICODE))
             );
+            if (!empty($ctx['panel_url'])) {
+                $attrs .= sprintf(' data-panel-url="%s"', self::e($ctx['panel_url']));
+            }
         }
 
         $out = array();
@@ -42,7 +48,11 @@ final class BoardRenderer
         if ($staff && isset($ctx['queues'], $ctx['queue_action'])) {
             $out[] = self::queuePicker($ctx);
         }
-        $out[] = sprintf('<p class="spb-hint">%s</p>', self::e($staff ? $t['drag_hint'] : $t['readonly']));
+        $hint = $staff ? $t['drag_hint'] : $t['readonly'];
+        if ($staff && !empty($ctx['panel_url'])) {
+            $hint .= ' ' . $t['drag_hint_panel'];
+        }
+        $out[] = sprintf('<p class="spb-hint">%s</p>', self::e($hint));
         if (!empty($ctx['truncated'])) {
             $out[] = sprintf('<p class="spb-hint spb-warn">%s</p>', self::e(sprintf($t['truncated'], (int) $ctx['max_cards'])));
         }
@@ -53,7 +63,18 @@ final class BoardRenderer
             $out[] = self::column($col, $ctx, $staff);
         }
 
-        $out[] = '</div></div>';
+        $out[] = '</div>';
+        if ($staff && !empty($ctx['panel_url'])) {
+            // Empty shell; board.js fills it with BoardController::staffPanel().
+            $out[] = sprintf(
+                '<aside class="spb-drawer" hidden aria-label="%s" tabindex="-1">'
+                . '<button type="button" class="spb-drawer-close" aria-label="%s">&times;</button>'
+                . '<div class="spb-drawer-content"></div></aside>',
+                self::e($t['panel_title']),
+                self::e($t['panel_close'])
+            );
+        }
+        $out[] = '</div>';
         return implode("\n", $out);
     }
 
@@ -196,6 +217,75 @@ final class BoardRenderer
 
         $html .= '</li>';
         return $html;
+    }
+
+    /**
+     * Quick-view panel: action buttons, osTicket's own ticket preview, note
+     * form. $previewHtml is the output of the core template
+     * include/staff/templates/ticket-preview.tmpl.php and is passed through
+     * as-is; that template escapes its own data. Everything this method adds
+     * goes through e().
+     *
+     * @param array $p  id, number, subject, ticket_url, note_url, actions
+     *                  (BoardActions::build), preview_html, strings
+     */
+    public static function panel(array $p): string
+    {
+        $t = $p['strings'];
+        $groups = array('status' => 'grp_status', 'assign' => 'grp_assign', 'route' => 'grp_route', 'mark' => 'grp_mark');
+
+        $html = sprintf(
+            '<div class="spb-panel-body" data-ticket-id="%d" data-number="%s">',
+            (int) $p['id'],
+            self::e($p['number'])
+        );
+        $html .= sprintf(
+            '<header class="spb-panel-head"><h2>#%s %s</h2><a class="spb-panel-open" href="%s">%s</a></header>',
+            self::e($p['number']),
+            self::e($p['subject']),
+            self::e($p['ticket_url']),
+            self::e($t['panel_open'])
+        );
+
+        $html .= '<div class="spb-actions">';
+        foreach ($groups as $group => $label) {
+            $items = array_values(array_filter($p['actions'], static function ($a) use ($group) {
+                return $a['group'] === $group;
+            }));
+            if (!$items) {
+                continue;
+            }
+            $html .= sprintf('<div class="spb-action-group" data-group="%s"><h3>%s</h3>', self::e($group), self::e($t[$label]));
+            foreach ($items as $a) {
+                $html .= sprintf(
+                    '<button type="button" class="spb-action" data-spb-dialog="%s">%s</button>',
+                    self::e($a['path']),
+                    self::e($a['label'])
+                );
+            }
+            $html .= '</div>';
+        }
+        $html .= '</div>';
+
+        $html .= sprintf('<div class="spb-preview">%s</div>', $p['preview_html']);
+
+        $html .= sprintf(
+            '<form class="spb-note" method="post" action="%s">'
+            . '<label for="spb-note-text">%s</label>'
+            . '<textarea id="spb-note-text" name="note" rows="4" maxlength="%d" required></textarea>'
+            . '<p class="spb-hint">%s</p>'
+            . '<input type="hidden" name="ticket_id" value="%d">'
+            . '<button type="submit">%s</button>'
+            . '</form>',
+            self::e($p['note_url']),
+            self::e($t['note_label']),
+            BoardController::NOTE_MAX,
+            self::e($t['note_hint']),
+            (int) $p['id'],
+            self::e($t['note_submit'])
+        );
+
+        return $html . '</div>';
     }
 
     public static function e(string $value): string
