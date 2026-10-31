@@ -579,6 +579,12 @@
         .catch(function () { failed(null); });
     }
 
+    // A sub-ticket's subject opens its own quick view.
+    drawer.addEventListener('click', function (e) {
+      var sub = e.target.closest && e.target.closest('.spb-subtickets [data-spb-open]');
+      if (sub) open(sub.dataset.spbOpen);
+    });
+
     // Thread entries in the preview: older ones come collapsed; a click
     // opens one, a click on the header of an open one folds it again. The
     // core binds this in an inline script, which innerHTML doesn't run.

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-31
+
+### Added
+
+- The quick view lists a ticket's sub-tickets under the thread: number, subject, assignee and status. The subject opens the sub-ticket in the quick view, the number its ticket page. Only sub-tickets the agent may see are listed, at most 50.
+
 ## [0.3.2] - 2026-10-31
 
 ### Changed
@@ -59,7 +65,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.2.0...v0.3.0

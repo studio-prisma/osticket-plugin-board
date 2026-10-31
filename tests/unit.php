@@ -242,6 +242,22 @@ check('panel: thread gets a heading before the core thread block', BoardRenderer
 check('panel: thread heading escaped, only once, nothing without the block', strpos(BoardRenderer::threadHeading('<div id="threadPreview"></div>', '<b>$0</b>'), '&lt;b&gt;$0&lt;/b&gt;') !== false
     && substr_count(BoardRenderer::threadHeading('<div id="threadPreview"></div><div id="threadPreview"></div>', 'T'), 'spb-thread-heading') === 1
     && BoardRenderer::threadHeading('<div id="core">x</div>', 'T') === '<div id="core">x</div>');
+$kids = BoardRenderer::subtickets(array(
+    array('id' => 9, 'number' => '0<9>', 'subject' => '<img src=x>', 'status_name' => 'Open', 'status_state' => 'open', 'assignee' => '<b>Ann</b>'),
+    array('id' => 10, 'number' => '10', 'subject' => 's', 'status_name' => 'Closed', 'status_state' => 'closed', 'assignee' => '')), false, '/scp/tickets.php?id=', $strings);
+check('subtickets: heading with count, one entry each, opens own quick view', strpos($kids, '<h3 class="spb-subtickets-heading">' . $strings['panel_subtickets'] . ' <span class="spb-count">2</span></h3>') !== false
+    && substr_count($kids, 'class="spb-child"') === 2 && strpos($kids, 'data-spb-open="9"') !== false
+    && strpos($kids, 'href="/scp/tickets.php?id=10"') !== false && strpos($kids, 'spb-badge spb-state-closed">Closed') !== false);
+check('subtickets: data escaped, no assignee span when unassigned', strpos($kids, '<img') === false && strpos($kids, '<b>') === false
+    && strpos($kids, '#0&lt;9&gt;') !== false && substr_count($kids, 'spb-child-who') === 1);
+check('subtickets: nothing without any, hint when cut off', BoardRenderer::subtickets(array(), true, '/', $strings) === ''
+    && strpos($kids, $strings['panel_subtickets_more']) === false
+    && strpos(BoardRenderer::subtickets(array(array('id' => 1, 'number' => '1', 'subject' => 's', 'status_name' => 'Open', 'status_state' => 'open', 'assignee' => '')), true, '/', $strings), $strings['panel_subtickets_more']) !== false);
+check('panel: sub-tickets come after the preview', strpos(BoardRenderer::panel(array('id' => 7, 'number' => '1', 'subject' => 's', 'ticket_url' => '/', 'note_url' => '/',
+    'actions' => array(), 'preview_html' => '<div id="core"></div>', 'strings' => $strings, 'ticket_base' => '/t?id=',
+    'children' => array(array('id' => 9, 'number' => '9', 'subject' => 's', 'status_name' => 'Open', 'status_state' => 'open', 'assignee' => '')))),
+    '<div id="core"></div></div><section class="spb-subtickets">') !== false
+    && strpos($panel, 'spb-subtickets') === false);
 check('panel: core preview passed through unchanged', strpos($panel, '<div class="spb-preview"><div id="core">core</div></div>') !== false);
 check('panel: note form posts ticket id to the note route', strpos($panel, 'action="/scp/ajax.php/board/note"') !== false
     && strpos($panel, 'name="ticket_id" value="7"') !== false && strpos($panel, 'maxlength="' . BoardController::NOTE_MAX . '"') !== false);
