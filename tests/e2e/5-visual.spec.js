@@ -121,7 +121,20 @@ test.describe('client board', () => {
     await page.screenshot({ path: shot('client-board'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
-    await noPageOverflow(page);
+    // The stock client portal has a fixed-width layout, so the page itself
+    // scrolls sideways on a phone whatever the board does (a responsive theme
+    // fixes that). What the board owes: columns stacked, nothing wider than
+    // the space the portal gives it.
+    const fit = await page.evaluate(() => {
+      const board = document.querySelector('.spb-board');
+      const cols = [...board.querySelectorAll('.spb-col')].map((c) => c.getBoundingClientRect());
+      return {
+        inner: board.scrollWidth - board.clientWidth,
+        stacked: cols.every((r, i) => i === 0 || r.top > cols[i - 1].top),
+      };
+    });
+    expect(fit.inner).toBeLessThanOrEqual(1);
+    expect(fit.stacked).toBe(true);
     await page.screenshot({ path: shot('client-mobile'), fullPage: true });
     expect(errors).toEqual([]);
   });
