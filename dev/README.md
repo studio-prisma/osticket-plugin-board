@@ -5,7 +5,10 @@ osTicket 1.18.4 on PHP 8.3 / Apache, MariaDB 11.4 and Mailpit, all on `127.0.0.1
 ```bash
 ./dev/up.sh      # build, install, seed
 ./dev/down.sh    # stop and delete (the database lives on tmpfs)
+./dev/try.sh     # fresh stack, end-to-end suite, then open it in Chrome
 ```
+
+`try.sh` is for clicking around by hand after the tests: it opens the portal login, the agent login and Mailpit in Chrome (default browser if Chrome is missing) and prints which test logins exist. The suite changes ticket statuses; `./dev/try.sh --no-tests` opens the untouched seed instead. The stack keeps running until `./dev/down.sh`.
 
 `up.sh` generates all passwords on the first run into `dev/local/credentials.env`. `dev/local/` is git-ignored; nothing secret is part of the repository. The seed writes ticket IDs and numbers to `dev/local/seed.json`, which the end-to-end suite reads.
 

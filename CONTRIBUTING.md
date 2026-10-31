@@ -26,7 +26,7 @@ cd tests/e2e && npm ci && npx playwright install chromium && npx playwright test
 ./dev/down.sh
 ```
 
-`dev/README.md` explains the stack and how to mount a theme or other plugins for a local run.
+Or in one go, ending in a browser to test by hand: `./dev/try.sh`. `dev/README.md` explains the stack and how to mount a theme or other plugins for a local run.
 
 To build the install package:
 
