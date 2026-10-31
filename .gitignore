@@ -1,0 +1,38 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backup / temp
+*.bak
+*.tmp
+*.log
+*~
+
+# Build output
+dist/
+*.zip
+
+# Test artefacts
+# T13 legt DISABLED kurzzeitig an und raeumt es im finally wieder ab.
+# Ignoriert, damit ein abgebrochener Lauf die Datei nicht in einen Commit traegt.
+DISABLED
+tests/failcopy/
+tests/www/*.log
+__pycache__/
+*.pyc
+
+# Local-only
+local/
+private/
+.drafts/
+
+# E2E
+node_modules/
+tests/e2e/package-lock.json.bak

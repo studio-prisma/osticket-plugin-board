@@ -1,0 +1,40 @@
+# Local test stack for the Ticket Board plugin.
+#
+#   ./dev/up.sh       build, install osTicket, seed test data
+#   ./dev/down.sh     stop and delete everything
+#
+# Ports bind to 127.0.0.1 only. Additional plugins or a theme can be mounted
+# through dev/local/compose.override.yml (git-ignored), see dev/README.md.
+name: spb-dev
+
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: osticket
+      MARIADB_USER: osticket
+      MARIADB_PASSWORD: ${SPB_DB_PASSWORD:?run dev/up.sh}
+      MARIADB_RANDOM_ROOT_PASSWORD: "yes"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+    tmpfs:
+      - /var/lib/mysql
+
+  mail:
+    image: axllent/mailpit:v1.21.8
+    ports:
+      - "127.0.0.1:${SPB_MAIL_PORT:-8026}:8025"
+
+  osticket:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${SPB_HTTP_PORT:-8088}:80"
+    volumes:
+      - ..:/var/www/html/include/plugins/board:ro
+      - ./seed:/seed:ro

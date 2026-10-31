@@ -1,0 +1,254 @@
+/*
+ * Ticket Board for osTicket.
+ *
+ * Every colour and radius is a custom property on .spb-wrap. A theme
+ * overrides them without touching this file, e.g. in a custom stylesheet:
+ *
+ *   .spb-wrap { --spb-accent: #330066; --spb-radius: 2px; }
+ */
+
+.spb-wrap {
+  --spb-accent: #0e5c8c;
+  --spb-text: #1f2328;
+  --spb-muted: #57606a;
+  --spb-col-bg: #f3f5f7;
+  --spb-card-bg: #ffffff;
+  --spb-border: #d0d7de;
+  --spb-open: #0e5c8c;
+  --spb-closed: #57606a;
+  --spb-overdue: #b42318;
+  --spb-drop: #e6f0f7;
+  --spb-radius: 6px;
+  /* Columns share the width, never narrower than min, never wider than max.
+     Only when min does not fit does the board scroll sideways. */
+  --spb-col-min: 180px;
+  --spb-col-max: 320px;
+
+  color: var(--spb-text);
+  margin: 0 0 24px;
+}
+
+.spb-title {
+  margin: 8px 0 4px;
+}
+
+.spb-hint {
+  color: var(--spb-muted);
+  margin: 0 0 8px;
+}
+
+.spb-warn {
+  color: var(--spb-overdue);
+}
+
+.spb-status:empty {
+  display: none;
+}
+
+.spb-status {
+  padding: 6px 10px;
+  border-left: 3px solid var(--spb-accent);
+  background: var(--spb-col-bg);
+  margin: 0 0 8px;
+}
+
+.spb-status.spb-error {
+  border-left-color: var(--spb-overdue);
+}
+
+.spb-board {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.spb-col {
+  flex: 1 0 var(--spb-col-min);
+  max-width: var(--spb-col-max);
+  background: var(--spb-col-bg);
+  border: 1px solid var(--spb-border);
+  border-radius: var(--spb-radius);
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+}
+
+.spb-col.spb-dropping {
+  background: var(--spb-drop);
+  border-color: var(--spb-accent);
+}
+
+.spb-col-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 3px solid var(--spb-open);
+}
+
+.spb-state-closed .spb-col-head {
+  border-bottom-color: var(--spb-closed);
+}
+
+.spb-col-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.spb-count {
+  font-size: 12px;
+  color: var(--spb-muted);
+}
+
+.spb-col-note {
+  margin: 6px 10px 0;
+  font-size: 11px;
+  color: var(--spb-muted);
+}
+
+.spb-cards {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.spb-empty {
+  color: var(--spb-muted);
+  font-size: 12px;
+  padding: 4px 2px;
+}
+
+.spb-card {
+  background: var(--spb-card-bg);
+  border: 1px solid var(--spb-border);
+  border-left: 3px solid var(--spb-accent);
+  border-radius: var(--spb-radius);
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.spb-card[draggable="true"] {
+  cursor: grab;
+}
+
+.spb-card.spb-dragging {
+  opacity: 0.5;
+}
+
+.spb-card:focus {
+  outline: 2px solid var(--spb-accent);
+  outline-offset: 1px;
+}
+
+.spb-card.spb-overdue {
+  border-left-color: var(--spb-overdue);
+}
+
+.spb-num {
+  font-weight: 600;
+  color: var(--spb-accent);
+}
+
+.spb-flag {
+  font-size: 11px;
+  color: var(--spb-overdue);
+  font-weight: 600;
+}
+
+.spb-subject {
+  margin: 2px 0 6px;
+  overflow-wrap: anywhere;
+}
+
+.spb-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 8px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--spb-muted);
+}
+
+/* The agent panel styles dt/dd globally (margins, line height); reset them
+   here so the meta block stays compact in both panels. */
+.spb-meta dt,
+.spb-meta dd {
+  margin: 0;
+  padding: 0;
+  line-height: 1.4;
+  float: none;
+  width: auto;
+}
+
+.spb-meta dt {
+  font-weight: 600;
+}
+
+.spb-meta dd {
+  overflow-wrap: anywhere;
+}
+
+.spb-children {
+  margin-top: 6px;
+  border-top: 1px dashed var(--spb-border);
+  padding-top: 4px;
+  font-size: 12px;
+}
+
+.spb-children summary {
+  cursor: pointer;
+  color: var(--spb-muted);
+}
+
+.spb-children ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.spb-child {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.spb-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 10px;
+  border: 1px solid var(--spb-open);
+  color: var(--spb-open);
+  white-space: nowrap;
+}
+
+.spb-badge.spb-state-closed {
+  border-color: var(--spb-closed);
+  color: var(--spb-closed);
+}
+
+@media (max-width: 760px) {
+  .spb-board {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+
+  .spb-col {
+    flex-basis: auto;
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .spb-col,
+  .spb-card {
+    transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+  }
+}

@@ -1,0 +1,132 @@
+name: Validate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    # Weekly, Monday 06:00 UTC: catches PHP release drift and base image changes.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: PHP Lint (${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.0", "8.1", "8.2", "8.3", "8.4"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Syntax check all production files
+        run: |
+          fail=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" || fail=1
+          done < <(find . -name '*.php' -not -path './tests/*' -not -path './dev/*' -print0)
+          exit $fail
+
+      - name: Unit tests
+        run: php tests/unit.php
+
+  js:
+    name: JavaScript syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: node --check
+        run: node --check assets/board.js
+
+  e2e:
+    name: End-to-end (osTicket 1.18.4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
+
+      - name: Start test stack
+        run: ./dev/up.sh
+
+      - name: Install Playwright
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run suite
+        working-directory: tests/e2e
+        run: npx playwright test
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report
+          path: |
+            dev/local/e2e-report
+            dev/local/e2e-results
+          retention-days: 7
+
+      - name: Stop test stack
+        if: always()
+        run: ./dev/down.sh
+
+  actionlint:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: actionlint
+        uses: raven-actions/actionlint@v2
+
+  # Single aggregating context for the branch ruleset. Required-status-check names
+  # are job names, and the lint matrix produces one name per PHP version. Those
+  # would have to be re-registered on every version bump. This job is the only
+  # context the ruleset knows about; the matrix can change freely underneath it.
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    needs: [lint, js, e2e, actionlint]
+    if: always()
+    steps:
+      - name: Fail unless every job succeeded
+        if: >-
+          contains(needs.*.result, 'failure') ||
+          contains(needs.*.result, 'cancelled') ||
+          contains(needs.*.result, 'skipped')
+        run: |
+          echo "lint=${{ needs.lint.result }}"
+          echo "js=${{ needs.js.result }}"
+          echo "e2e=${{ needs.e2e.result }}"
+          echo "actionlint=${{ needs.actionlint.result }}"
+          exit 1
