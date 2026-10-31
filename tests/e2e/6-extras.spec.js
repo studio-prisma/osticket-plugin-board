@@ -1,7 +1,7 @@
 // Due and priority tags, sorting, swimlanes, column limits, live refresh.
 const { test, expect } = require('@playwright/test');
 const path = require('path');
-const { env, requireSeed, watchErrors, staffLogin, LOCAL } = require('./support');
+const { env, requireSeed, watchErrors, staffLogin, sql, LOCAL } = require('./support');
 
 const seed = requireSeed();
 const n = seed.numbers;
@@ -15,6 +15,14 @@ async function openBoard(page, query) {
 
 async function cardOrder(page, status) {
   return page.$$eval(`.spb-col[data-status-name="${status}"] .spb-cards > .spb-card`, (els) => els.map((e) => e.dataset.number));
+}
+
+// A change made outside this browser, straight in the database. A second
+// session of the same agent made the test flaky on CI runners: both
+// sessions renew their session ID ten seconds after login, at the same
+// moment, and the first one's requests stalled.
+function changeElsewhere(ticketId, statusId) {
+  sql(`UPDATE ost_ticket SET status_id=${Number(statusId)}, updated=NOW() WHERE ticket_id=${Number(ticketId)}`);
 }
 
 function moveVia(page, ticketId, statusId) {
@@ -119,47 +127,44 @@ test.describe('admin', () => {
 test.describe('live refresh', () => {
   test.setTimeout(150000);
 
-  test('changes made elsewhere: swapped in when idle, offered when busy', async ({ browser }) => {
-    const viewerCtx = await browser.newContext();
-    const editorCtx = await browser.newContext();
-    const viewer = await viewerCtx.newPage();
-    const editor = await editorCtx.newPage();
+  test('changes made elsewhere: swapped in when idle, offered when busy', async ({ page: viewer }) => {
     const errors = watchErrors(viewer);
     await staffLogin(viewer, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
-    await staffLogin(editor, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
     await openBoard(viewer, 'queue=all&group=&sort=updated');
-    await openBoard(editor, 'queue=all');
 
-    // Idle viewer: the board updates by itself.
-    expect(await moveVia(editor, t.G1, seed.status.in_progress)).toBe(200);
-    await expect(viewer.locator(`.spb-col[data-status-name="In Progress"] .spb-card[data-number="${n.G1}"]`))
-      .toHaveCount(1, { timeout: 40000 });
-    await expect(viewer.locator('.spb-status')).toContainText('Board updated');
+    try {
+      // Idle viewer: the board updates by itself.
+      changeElsewhere(t.G1, seed.status.in_progress);
+      await expect(viewer.locator(`.spb-col[data-status-name="In Progress"] .spb-card[data-number="${n.G1}"]`))
+        .toHaveCount(1, { timeout: 40000 });
+      await expect(viewer.locator('.spb-status')).toContainText('Board updated');
 
-    // Busy viewer (keeps pressing a key): the update is offered, not forced.
-    expect(await moveVia(editor, t.G1, seed.status.open)).toBe(200);
-    const button = viewer.locator('.spb-updates');
-    const deadline = Date.now() + 40000;
-    while (Date.now() < deadline && !(await button.isVisible())) {
-      await viewer.keyboard.press('Shift');
-      await viewer.waitForTimeout(1500);
+      // Busy viewer (keeps pressing a key): the update is offered, not forced.
+      changeElsewhere(t.G1, seed.status.open);
+      const button = viewer.locator('.spb-updates');
+      const deadline = Date.now() + 40000;
+      while (Date.now() < deadline && !(await button.isVisible())) {
+        await viewer.keyboard.press('Shift');
+        await viewer.waitForTimeout(1500);
+      }
+      await expect(button).toBeVisible();
+      // Still the old state underneath.
+      await expect(viewer.locator(`.spb-col[data-status-name="In Progress"] .spb-card[data-number="${n.G1}"]`)).toHaveCount(1);
+      await viewer.screenshot({ path: shot('updates-offered') });
+      await button.click();
+      // The swap fetches the whole page again; give it time under load.
+      await expect(viewer.locator(`.spb-col[data-status-name="Open"] .spb-card[data-number="${n.G1}"]`)).toHaveCount(1, { timeout: 15000 });
+      await expect(button).toBeHidden();
+
+      // After a swap the board still works: quick view opens.
+      await viewer.locator(`.spb-card[data-number="${n.G1}"] .spb-subject`).click();
+      await expect(viewer.locator('.spb-panel-body')).toHaveAttribute('data-number', n.G1);
+
+      expect(errors).toEqual([]);
+    } finally {
+      // A failure must not leave G1 in progress for the specs after this one.
+      changeElsewhere(t.G1, seed.status.open);
     }
-    await expect(button).toBeVisible();
-    // Still the old state underneath.
-    await expect(viewer.locator(`.spb-col[data-status-name="In Progress"] .spb-card[data-number="${n.G1}"]`)).toHaveCount(1);
-    await viewer.screenshot({ path: shot('updates-offered') });
-    await button.click();
-    // The swap fetches the whole page again; give it time under load.
-    await expect(viewer.locator(`.spb-col[data-status-name="Open"] .spb-card[data-number="${n.G1}"]`)).toHaveCount(1, { timeout: 15000 });
-    await expect(button).toBeHidden();
-
-    // After a swap the board still works: quick view opens.
-    await viewer.locator(`.spb-card[data-number="${n.G1}"] .spb-subject`).click();
-    await expect(viewer.locator('.spb-panel-body')).toHaveAttribute('data-number', n.G1);
-
-    expect(errors).toEqual([]);
-    await viewerCtx.close();
-    await editorCtx.close();
   });
 
   test('state endpoint: agent only, no store, reflects changes', async ({ page }) => {
@@ -173,9 +178,12 @@ test.describe('live refresh', () => {
     expect(a.status).toBe(200);
     expect(a.cache).toContain('no-store');
     expect(a.body.signature).toMatch(/^[0-9a-f]{40}$/);
-    expect(await moveVia(page, t.G1, seed.status.in_progress)).toBe(200);
-    const b = await read();
-    expect(b.body.signature).not.toBe(a.body.signature);
-    expect(await moveVia(page, t.G1, seed.status.open)).toBe(200);
+    try {
+      expect(await moveVia(page, t.G1, seed.status.in_progress)).toBe(200);
+      const b = await read();
+      expect(b.body.signature).not.toBe(a.body.signature);
+    } finally {
+      changeElsewhere(t.G1, seed.status.open);
+    }
   });
 });
