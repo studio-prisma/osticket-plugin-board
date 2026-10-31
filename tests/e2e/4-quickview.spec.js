@@ -1,7 +1,7 @@
-// Quick view: panel, core dialogs from the panel, internal note.
+// Quick view: panel, actions run from the panel, pickers, undo, internal note.
 const { test, expect } = require('@playwright/test');
 const path = require('path');
-const { env, requireSeed, watchErrors, staffLogin, clientLogin, LOCAL } = require('./support');
+const { env, requireSeed, watchErrors, staffLogin, clientLogin, sql, LOCAL } = require('./support');
 
 const seed = requireSeed();
 const n = seed.numbers;
@@ -12,6 +12,26 @@ async function openPanel(page, number) {
   await page.locator(`.spb-card[data-number="${number}"] .spb-subject`).click();
   await expect(page.locator('.spb-drawer')).toBeVisible();
   await expect(page.locator('.spb-panel-body')).toHaveAttribute('data-number', number);
+}
+
+const ACT = '/scp/ajax.php/board/act';
+const NS = `plugin.${seed.plugin.id}.instance.${seed.plugin.instance}`;
+
+// Runs a quick-view action and waits until the panel shows the ticket again.
+async function act(page, button, number) {
+  const done = page.waitForResponse((r) => r.url().includes('/board/act'));
+  await button.click();
+  expect((await done).status()).toBe(200);
+  await expect(page.locator('.spb-panel-body')).toHaveAttribute('data-number', number);
+}
+
+// An open card without sub-tickets that has another open card after it.
+function closablePair(page) {
+  return page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.spb-col[data-state="open"] .spb-cards > .spb-card')];
+    const i = cards.findIndex((c, k) => !c.querySelector('.spb-children') && cards[k + 1]);
+    return i < 0 ? null : { id: cards[i].dataset.ticketId, number: cards[i].dataset.number, next: cards[i + 1].dataset.number };
+  });
 }
 
 function post(page, url, body, withToken = true) {
@@ -55,36 +75,97 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
-  test('assign through the core dialog, board reloads with the panel open', async ({ page }) => {
+  test('assign from the picker: no core dialog, panel stays on the ticket', async ({ page }) => {
+    const errors = watchErrors(page);
     await openPanel(page, n.A1);
-    await page.locator('.spb-action', { hasText: 'Assign to agent' }).click();
-    const dialog = page.locator('#popup');
-    await expect(dialog).toBeVisible();
-    await dialog.locator('select').first().selectOption({ label: 'Board Admin' });
-    await Promise.all([
-      page.waitForEvent('load'),
-      dialog.locator('button[type="submit"], input[type="submit"]').last().click(),
-    ]);
-    await expect(page.locator('.spb-panel-body')).toHaveAttribute('data-number', n.A1);
+    const toggle = page.locator('[data-spb-menu="agents"]');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const menu = page.locator('.spb-menu[data-menu="agents"]');
+    await expect(menu).toBeVisible();
+    await act(page, menu.locator('.spb-option', { hasText: 'Board Admin' }), n.A1);
+    await expect(page.locator('#popup')).toBeHidden();
+    await expect(page.locator('.spb-status')).toContainText('Done.');
     await expect(page.locator('.spb-action', { hasText: 'Release' })).toBeVisible();
     await expect(page.locator(`.spb-card[data-number="${n.A1}"] .spb-meta`)).toContainText('Board Admin');
+    expect(errors).toEqual([]);
   });
 
-  test('status through the core dialog with a comment', async ({ page }) => {
+  test('status in one click, with the note written beforehand, and undo', async ({ page }) => {
+    const mark = 'board-act-note-7d2a';
     await openPanel(page, n.X1);
-    await page.locator('.spb-action', { hasText: 'In Progress' }).click();
-    const dialog = page.locator('#popup');
-    await expect(dialog).toBeVisible();
-    // The comment field is osTicket's rich-text editor; the textarea under
-    // it is hidden.
-    const editor = dialog.locator('[contenteditable="true"]').first();
-    await editor.click();
-    await page.keyboard.type('Moved from the quick view.');
-    await Promise.all([
-      page.waitForEvent('load'),
-      dialog.locator('button[type="submit"], input[type="submit"]').last().click(),
-    ]);
+    await page.fill('#spb-note-text', mark);
+    await act(page, page.locator('.spb-action-group[data-group="status"] .spb-action', { hasText: 'In Progress' }), n.X1);
+    await expect(page.locator('#popup')).toBeHidden();
+    await expect(page.locator('.spb-status')).toContainText('Internal note saved with it.');
     await expect(page.locator(`.spb-col[data-status-name="In Progress"] .spb-card[data-number="${n.X1}"]`)).toHaveCount(1);
+    await expect(page.locator('#spb-note-text')).toHaveValue('');
+
+    // Undo puts the old status back and doesn't post the note again.
+    const undone = page.waitForResponse((r) => r.url().includes('/board/act'));
+    await page.locator('.spb-toast-action', { hasText: 'Undo' }).click();
+    expect((await undone).status()).toBe(200);
+    await expect(page.locator('.spb-status')).toContainText('Change undone.');
+    await expect(page.locator(`.spb-col[data-status-name="Open"] .spb-card[data-number="${n.X1}"]`)).toHaveCount(1);
+
+    await page.goto(`/scp/tickets.php?id=${t.X1}`);
+    await expect(page.locator('.thread-body', { hasText: mark })).toHaveCount(1);
+
+    // Later specs expect X1 in progress.
+    const again = await post(page, '/scp/ajax.php/board/move', `ticket_id=${t.X1}&status_id=${seed.status.in_progress}`);
+    expect(again.status).toBe(200);
+  });
+
+  test('closing from the quick view moves on to the next open card', async ({ page }) => {
+    const pair = await closablePair(page);
+    expect(pair).not.toBeNull();
+
+    await openPanel(page, pair.number);
+    await act(page, page.locator('.spb-action-group[data-group="status"] .spb-action', { hasText: 'Resolved' }), pair.next);
+    await expect(page.locator('#popup')).toBeHidden();
+    await expect(page.locator(`.spb-col[data-status-name="Resolved"] .spb-card[data-number="${pair.number}"]`)).toHaveCount(1);
+
+    // Put it back so later specs see the seeded state.
+    const back = await post(page, '/scp/ajax.php/board/move', `ticket_id=${pair.id}&status_id=${seed.status.open}`);
+    expect(back.status).toBe(200);
+  });
+
+  test('with "Next ticket after closing" off, the closed ticket stays open in the panel', async ({ page }) => {
+    sql(`INSERT INTO ost_config (namespace, \`key\`, value, updated) VALUES ('${NS}', 'next_after_close', '0', NOW())`);
+    try {
+      await page.reload();
+      await expect(page.locator('.spb-board')).toHaveAttribute('data-next-after-close', '0');
+      const pair = await closablePair(page);
+      await openPanel(page, pair.number);
+      await act(page, page.locator('.spb-action-group[data-group="status"] .spb-action', { hasText: 'Resolved' }), pair.number);
+      const back = await post(page, '/scp/ajax.php/board/move', `ticket_id=${pair.id}&status_id=${seed.status.open}`);
+      expect(back.status).toBe(200);
+    } finally {
+      sql(`DELETE FROM ost_config WHERE namespace='${NS}' AND \`key\`='next_after_close'`);
+    }
+  });
+
+  test('transfer and priority from their pickers; the current value is not offered', async ({ page }) => {
+    await openPanel(page, n.A5);
+    await page.locator('[data-spb-menu="depts"]').click();
+    await act(page, page.locator('.spb-menu[data-menu="depts"] .spb-option', { hasText: 'Sales' }), n.A5);
+    await page.locator('[data-spb-menu="depts"]').click();
+    await expect(page.locator('.spb-menu[data-menu="depts"] .spb-option', { hasText: 'Sales' })).toHaveCount(0);
+    // Back where it was, so the Sales agent's view stays as seeded.
+    await act(page, page.locator('.spb-menu[data-menu="depts"] .spb-option', { hasText: 'Support' }), n.A5);
+
+    await page.locator('[data-spb-menu="priority"]').click();
+    await act(page, page.locator('.spb-menu[data-menu="priority"] .spb-option', { hasText: 'Low' }), n.A5);
+    await page.locator('[data-spb-menu="priority"]').click();
+    await expect(page.locator('.spb-menu[data-menu="priority"] .spb-option', { hasText: 'Low' })).toHaveCount(0);
+    await expect(page.locator('.spb-menu[data-menu="priority"] .spb-option', { hasText: 'Normal' })).toHaveCount(1);
+    await act(page, page.locator('.spb-menu[data-menu="priority"] .spb-option', { hasText: 'Normal' }), n.A5);
+  });
+
+  test('refer still opens the core dialog', async ({ page }) => {
+    await openPanel(page, n.A5);
+    await page.locator('.spb-action', { hasText: 'Refer' }).click();
+    await expect(page.locator('#popup')).toBeVisible();
   });
 
   test('internal note: stored as text, visible to agents, never to the customer', async ({ page, browser }) => {
@@ -111,6 +192,16 @@ test.describe('admin', () => {
     await ctx.close();
   });
 
+  test('act endpoint: CSRF, unknown action or value, unknown ticket', async ({ page }) => {
+    expect((await post(page, ACT, `ticket_id=${t.A5}&act=claim`, false)).status).toBe(400);
+    expect((await post(page, ACT, `ticket_id=${t.A5}&act=delete`)).status).toBe(422);
+    expect((await post(page, ACT, `ticket_id=${t.A5}&act=assign_agent&value=s999999`)).status).toBe(422);
+    expect((await post(page, ACT, `ticket_id=${t.A5}&act=assign_agent&value=t1`)).status).toBe(422);
+    expect((await post(page, ACT, `ticket_id=${t.A5}&act=status&value=1%20OR%201`)).status).toBe(422);
+    expect((await post(page, ACT, `ticket_id=${t.A5}&act=status&value=${seed.status.open}&note=${'x'.repeat(10001)}`)).status).toBe(422);
+    expect((await post(page, ACT, 'ticket_id=999999&act=claim')).status).toBe(404);
+  });
+
   test('note endpoint: CSRF, empty text, unknown ticket', async ({ page }) => {
     const url = '/scp/ajax.php/board/note';
     expect((await post(page, url, `ticket_id=${t.A1}&note=x`, false)).status).toBe(400);
@@ -134,6 +225,13 @@ test.describe('view-only agent in Sales', () => {
     }
   });
 
+  test('actions the role does not allow are refused on the endpoint too', async ({ page }) => {
+    const r = await post(page, ACT, `ticket_id=${t.S1}&act=status&value=${seed.status.closed}`);
+    expect(r.status).toBe(403);
+    const claim = await post(page, ACT, `ticket_id=${t.S1}&act=claim`);
+    expect(claim.status).toBe(403);
+  });
+
   test('panel and note of an invisible ticket answer like a missing one', async ({ page }) => {
     const statuses = await page.evaluate(async (ids) => {
       const out = [];
@@ -146,10 +244,15 @@ test.describe('view-only agent in Sales', () => {
     const missing = await post(page, '/scp/ajax.php/board/note', 'ticket_id=999999&note=x');
     expect(hidden.status).toBe(404);
     expect(hidden.body).toEqual(missing.body);
+
+    const hiddenAct = await post(page, ACT, `ticket_id=${t.A1}&act=claim`);
+    const missingAct = await post(page, ACT, 'ticket_id=999999&act=claim');
+    expect(hiddenAct.status).toBe(404);
+    expect(hiddenAct.body).toEqual(missingAct.body);
   });
 });
 
-test('a client session gets neither panel nor note', async ({ page }) => {
+test('a client session gets no panel, note or action', async ({ page }) => {
   await clientLogin(page, 'alice@acme.example');
   await page.goto('/ajax.php/board');
   const r = await page.evaluate(async (id) => {
@@ -160,7 +263,12 @@ test('a client session gets neither panel nor note', async ({ page }) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': token },
       body: `ticket_id=${id}&note=x`,
     });
-    return [panel.status, note.status];
+    const act = await fetch('/scp/ajax.php/board/act', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': token },
+      body: `ticket_id=${id}&act=claim`,
+    });
+    return [panel.status, note.status, act.status];
   }, t.A1);
-  expect(r).toEqual([403, 403]);
+  expect(r).toEqual([403, 403, 403]);
 });

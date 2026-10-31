@@ -40,12 +40,18 @@ final class BoardRenderer
                     'note_saved'    => $t['note_saved'],
                     'note_failed'   => $t['note_failed'],
                     'refreshed'     => $t['refreshed'],
+                    'act_done'      => $t['act_done'],
+                    'act_failed'    => $t['act_failed'],
+                    'act_note'      => $t['act_note'],
+                    'undo'          => $t['undo'],
+                    'undone'        => $t['undone'],
                     'limit'         => $t['limit'],
                     'limit_over'    => $t['limit_over'],
                 ), JSON_UNESCAPED_UNICODE))
             );
             if (!empty($ctx['panel_url'])) {
-                $attrs .= sprintf(' data-panel-url="%s"', self::e($ctx['panel_url']));
+                $attrs .= sprintf(' data-panel-url="%s" data-next-after-close="%d"',
+                    self::e($ctx['panel_url']), !empty($ctx['next_after_close']) ? 1 : 0);
             }
             if (!empty($ctx['refresh_url'])) {
                 $attrs .= sprintf(
@@ -364,9 +370,10 @@ final class BoardRenderer
         $groups = array('status' => 'grp_status', 'assign' => 'grp_assign', 'route' => 'grp_route', 'mark' => 'grp_mark');
 
         $html = sprintf(
-            '<div class="spb-panel-body" data-ticket-id="%d" data-number="%s">',
+            '<div class="spb-panel-body" data-ticket-id="%d" data-number="%s" data-act-url="%s">',
             (int) $p['id'],
-            self::e($p['number'])
+            self::e($p['number']),
+            self::e((string) ($p['act_url'] ?? ''))
         );
         $html .= sprintf(
             '<header class="spb-panel-head"><h2>#%s %s</h2><a class="spb-panel-open" href="%s">%s</a></header>',
@@ -376,35 +383,14 @@ final class BoardRenderer
             self::e($t['panel_open'])
         );
 
-        $html .= '<div class="spb-actions">';
-        foreach ($groups as $group => $label) {
-            $items = array_values(array_filter($p['actions'], static function ($a) use ($group) {
-                return $a['group'] === $group;
-            }));
-            if (!$items) {
-                continue;
-            }
-            $html .= sprintf('<div class="spb-action-group" data-group="%s"><h3>%s</h3>', self::e($group), self::e($t[$label]));
-            foreach ($items as $a) {
-                $html .= sprintf(
-                    '<button type="button" class="spb-action" data-spb-dialog="%s">%s</button>',
-                    self::e($a['path']),
-                    self::e($a['label'])
-                );
-            }
-            $html .= '</div>';
-        }
-        $html .= '</div>';
-
-        $html .= sprintf('<div class="spb-preview">%s</div>', $p['preview_html']);
-
+        // Note first: write, then click an action, and the note goes with it.
         $html .= sprintf(
             '<form class="spb-note" method="post" action="%s">'
             . '<label for="spb-note-text">%s</label>'
-            . '<textarea id="spb-note-text" name="note" rows="4" maxlength="%d" required></textarea>'
-            . '<p class="spb-hint">%s</p>'
+            . '<textarea id="spb-note-text" name="note" rows="3" maxlength="%d" required></textarea>'
+            . '<div class="spb-note-foot"><p class="spb-hint">%s</p>'
             . '<input type="hidden" name="ticket_id" value="%d">'
-            . '<button type="submit">%s</button>'
+            . '<button type="submit">%s</button></div>'
             . '</form>',
             self::e($p['note_url']),
             self::e($t['note_label']),
@@ -414,6 +400,66 @@ final class BoardRenderer
             self::e($t['note_submit'])
         );
 
+        $menus = $p['menus'] ?? array();
+        $html .= '<div class="spb-actions">';
+        foreach ($groups as $group => $label) {
+            $items = array_values(array_filter($p['actions'], static function ($a) use ($group) {
+                return $a['group'] === $group;
+            }));
+            if (!$items) {
+                continue;
+            }
+            $html .= sprintf('<div class="spb-action-group" data-group="%s"><h3>%s</h3>', self::e($group), self::e($t[$label]));
+            $lists = '';
+            foreach ($items as $a) {
+                if (isset($a['act'])) {
+                    $html .= sprintf(
+                        '<button type="button" class="spb-action" data-spb-act="%s" data-value="%s"%s>%s</button>',
+                        self::e($a['act']),
+                        self::e((string) $a['value']),
+                        isset($a['state']) ? sprintf(' data-state="%s"', self::e($a['state'])) : '',
+                        self::e($a['label'])
+                    );
+                } elseif (isset($a['menu'])) {
+                    $options = $menus[$a['menu']] ?? array();
+                    $html .= sprintf(
+                        '<button type="button" class="spb-action spb-has-menu" data-spb-menu="%s" aria-expanded="false">%s</button>',
+                        self::e($a['menu']),
+                        self::e($a['label'])
+                    );
+                    $lists .= self::menu($a['menu'], (string) $a['menu_act'], $options, $t);
+                } else {
+                    $html .= sprintf(
+                        '<button type="button" class="spb-action spb-dialog" data-spb-dialog="%s">%s</button>',
+                        self::e($a['path']),
+                        self::e($a['label'])
+                    );
+                }
+            }
+            $html .= $lists . '</div>';
+        }
+        $html .= '</div>';
+
+        $html .= sprintf('<div class="spb-preview">%s</div>', $p['preview_html']);
+
+        return $html . '</div>';
+    }
+
+    /** A picker that opens under its button; each entry runs the action. */
+    private static function menu(string $name, string $act, array $options, array $t): string
+    {
+        $html = sprintf('<div class="spb-menu" data-menu="%s" hidden>', self::e($name));
+        if (!$options) {
+            $html .= sprintf('<p class="spb-hint">%s</p>', self::e($t['menu_empty']));
+        }
+        foreach ($options as $o) {
+            $html .= sprintf(
+                '<button type="button" class="spb-option" data-spb-act="%s" data-value="%s">%s</button>',
+                self::e($act),
+                self::e($o['value']),
+                self::e($o['label'])
+            );
+        }
         return $html . '</div>';
     }
 

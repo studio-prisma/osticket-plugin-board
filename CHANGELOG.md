@@ -4,6 +4,20 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-31
+
+### Added
+
+- Quick-view actions run directly: status, claim, release and mark answered in one click; assign to agent or team, transfer and priority through pickers in the panel. New endpoint `/board/act` with the permission checks of the core dialogs. Refer and add task still open osTicket's dialogs.
+- Text in the quick view's note field is saved as an internal note with whichever action runs next.
+- "Undo" in the toast after a status change from the quick view.
+- Closing a ticket from the quick view opens the next open card on the board instead of the closed one: further down the same column, then the next open column; the panel closes when no open card is left.
+- Setting "Next ticket after closing", on by default.
+
+### Changed
+
+- The quick view no longer reloads the page after an action; it refreshes the board in place. The note field sits above the actions.
+
 ## [0.1.0] - 2026-10-31
 
 ### Added
@@ -26,5 +40,6 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/studio-prisma/osticket-plugin-board/releases/tag/v0.1.0

@@ -52,6 +52,15 @@ class BoardConfig extends PluginConfig
                 ),
             )),
 
+            'next_after_close' => new BooleanField(array(
+                'label'         => 'Next ticket after closing',
+                'default'       => true,
+                'configuration' => array(
+                    'desc' => 'When a ticket is closed from the quick view, open the next '
+                            . 'open card on the board instead of staying on the closed one.',
+                ),
+            )),
+
             'sec_limits' => new SectionBreakField(array(
                 'label' => 'Limits',
             )),

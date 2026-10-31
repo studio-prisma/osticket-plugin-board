@@ -36,6 +36,7 @@ Expected response: an acknowledgement within 7 days, an assessment within 30. Th
 - **Quick view of a ticket the agent can't open**, or a quick view that tells such a ticket apart from a non-existent ID.
 - **An internal note from the board** on a ticket the agent can't open, without a valid CSRF token, from a client session, or rendered as markup anywhere.
 - **An action button that opens a core dialog the agent's role doesn't allow** and the dialog then accepts.
+- **`/board/act` doing what the core dialog would refuse:** an action without the role permission, an assignee, team, department or priority the core dialog wouldn't list, an action on a ticket the agent can't open, or a request without a valid CSRF token that changes anything.
 
 ## Out of Scope
 

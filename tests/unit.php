@@ -180,34 +180,64 @@ $all = array('id' => 7, 'status_id' => 1, 'open' => true, 'assigned' => false, '
     'closeable' => true, 'answered' => false, 'can_close' => true, 'can_assign' => true, 'can_claim' => true,
     'can_release' => true, 'can_transfer' => true, 'can_refer' => true, 'can_mark_answered' => true,
     'can_edit' => true, 'priority_field_id' => 22, 'can_create_task' => true);
-$paths = fn($facts) => array_column(BoardActions::build($facts, $statusList, $strings), 'path');
+// One key per action: the act (with value), the picker, or the dialog path.
+$keys = fn($facts) => array_map(static function ($a) {
+    if (isset($a['act'])) {
+        return $a['act'] . ($a['value'] !== '' ? ':' . $a['value'] : '');
+    }
+    return isset($a['menu']) ? 'menu:' . $a['menu'] . '>' . $a['menu_act'] : 'dialog:' . $a['path'];
+}, BoardActions::build($facts, $statusList, $strings));
 
-check('actions: full role on an open, unassigned ticket', $paths($all) === array(
-    'tickets/7/status/reopen/6', 'tickets/7/status/close/3',
-    'tickets/7/assign/agents', 'tickets/7/assign/teams', 'tickets/7/claim',
-    'tickets/7/transfer', 'tickets/7/refer',
-    'tickets/7/mark/answered', 'tickets/7/field/22/edit', 'tickets/7/add-task'));
+check('actions: full role on an open, unassigned ticket', $keys($all) === array(
+    'status:6', 'status:3',
+    'menu:agents>assign_agent', 'menu:teams>assign_team', 'claim',
+    'menu:depts>transfer', 'dialog:tickets/7/refer',
+    'answered', 'menu:priority>priority', 'dialog:tickets/7/add-task'));
 $none = array_merge($all, array('can_close' => false, 'can_assign' => false, 'can_claim' => false,
     'can_release' => false, 'can_transfer' => false, 'can_refer' => false, 'can_mark_answered' => false,
     'can_edit' => false, 'can_create_task' => false));
-check('actions: view-only role gets none', $paths($none) === array());
-check('actions: not closeable hides closed states only', !in_array('tickets/7/status/close/3', $paths(array_merge($all, array('closeable' => false))), true)
-    && in_array('tickets/7/status/reopen/6', $paths(array_merge($all, array('closeable' => false))), true));
-$assigned = $paths(array_merge($all, array('assigned' => true, 'has_staff' => true, 'answered' => true)));
-check('actions: assigned ticket offers release, no claim, mark unanswered', in_array('tickets/7/release', $assigned, true)
-    && !in_array('tickets/7/claim', $assigned, true) && in_array('tickets/7/mark/unanswered', $assigned, true));
-$closedT = $paths(array_merge($all, array('open' => false, 'status_id' => 3)));
-check('actions: closed ticket, no assign or mark, reopen offered', !preg_grep('#/assign/|/mark/|/claim#', $closedT)
-    && in_array('tickets/7/status/reopen/1', $closedT, true) && !in_array('tickets/7/status/close/3', $closedT, true));
-check('actions: no priority field, no priority action', !in_array('tickets/7/field/0/edit', $paths(array_merge($all, array('priority_field_id' => 0))), true));
+check('actions: view-only role gets none', $keys($none) === array());
+check('actions: not closeable hides closed states only', !in_array('status:3', $keys(array_merge($all, array('closeable' => false))), true)
+    && in_array('status:6', $keys(array_merge($all, array('closeable' => false))), true));
+$assigned = $keys(array_merge($all, array('assigned' => true, 'has_staff' => true, 'answered' => true)));
+check('actions: assigned ticket offers release, no claim, mark unanswered', in_array('release', $assigned, true)
+    && !in_array('claim', $assigned, true) && in_array('unanswered', $assigned, true));
+$closedT = $keys(array_merge($all, array('open' => false, 'status_id' => 3)));
+check('actions: closed ticket, no assign or mark, reopen offered', !preg_grep('#^(menu:agents|menu:teams|claim|answered|unanswered)#', $closedT)
+    && in_array('status:1', $closedT, true) && !in_array('status:3', $closedT, true));
+check('actions: no priority field, no priority action', !in_array('menu:priority>priority', $keys(array_merge($all, array('priority_field_id' => 0))), true));
+check('actions: every act is one the endpoint accepts', !array_diff(array_merge(
+    array_column(BoardActions::build($all, $statusList, $strings), 'act'),
+    array_column(BoardActions::build($all, $statusList, $strings), 'menu_act'),
+    array_column(BoardActions::build(array_merge($all, array('assigned' => true, 'has_staff' => true, 'answered' => true)), $statusList, $strings), 'act')
+), BoardActions::ACTS));
+check('actions: status entries carry their state', array_column(array_filter(BoardActions::build($all, $statusList, $strings),
+    static fn($a) => ($a['act'] ?? '') === 'status'), 'state') === array('open', 'closed'));
+
+check('options: flattened, grouped lists merged, current left out', BoardActions::options(array(
+    'Agents' => array('s1' => 'Ann', 's2' => 'Bob'), 't3' => 'Team', '' => '-- none --'), 's2') === array(
+    array('value' => 's1', 'label' => 'Ann'), array('value' => 't3', 'label' => 'Team')));
+check('options: empty input gives no options', BoardActions::options(null) === array() && BoardActions::options(array()) === array());
 
 $panel = BoardRenderer::panel(array('id' => 7, 'number' => '00<7>', 'subject' => '<img src=x onerror=1>',
-    'ticket_url' => '/scp/tickets.php?id=7', 'note_url' => '/scp/ajax.php/board/note',
+    'ticket_url' => '/scp/tickets.php?id=7', 'note_url' => '/scp/ajax.php/board/note', 'act_url' => '/scp/ajax.php/board/act',
     'actions' => BoardActions::build($all, $statusList, $strings), 'preview_html' => '<div id="core">core</div>',
+    'menus' => array('agents' => array(array('value' => 's2', 'label' => '<b>Bob</b>')), 'teams' => array(),
+        'depts' => array(array('value' => '4', 'label' => 'Sales')), 'priority' => array(array('value' => '3', 'label' => 'High'))),
     'strings' => $strings));
 check('panel: ticket data escaped', strpos($panel, '<img') === false && strpos($panel, '#00&lt;7&gt; &lt;img') !== false);
-check('panel: actions as buttons with core dialog paths', substr_count($panel, 'class="spb-action"') === 10
-    && strpos($panel, 'data-spb-dialog="tickets/7/assign/agents"') !== false);
+check('panel: one button per action, run directly or through a picker', preg_match_all('#class="spb-action( |")#', $panel) === 10
+    && strpos($panel, 'data-spb-act="status" data-value="3" data-state="closed"') !== false
+    && strpos($panel, 'data-spb-act="claim" data-value=""') !== false
+    && strpos($panel, 'data-spb-menu="agents"') !== false
+    && strpos($panel, 'data-act-url="/scp/ajax.php/board/act"') !== false);
+check('panel: only refer and add task open core dialogs', substr_count($panel, 'data-spb-dialog=') === 2
+    && strpos($panel, 'data-spb-dialog="tickets/7/refer"') !== false);
+check('panel: picker entries escaped and bound to their act', strpos($panel, '<b>Bob') === false
+    && strpos($panel, 'data-spb-act="assign_agent" data-value="s2">&lt;b&gt;Bob&lt;/b&gt;') !== false
+    && strpos($panel, 'data-spb-act="transfer" data-value="4"') !== false);
+check('panel: empty picker says so', strpos($panel, '<div class="spb-menu" data-menu="teams" hidden><p class="spb-hint">' . $strings['menu_empty']) !== false);
+check('panel: note field comes before the actions', strpos($panel, 'spb-note') < strpos($panel, 'spb-actions'));
 check('panel: core preview passed through unchanged', strpos($panel, '<div class="spb-preview"><div id="core">core</div></div>') !== false);
 check('panel: note form posts ticket id to the note route', strpos($panel, 'action="/scp/ajax.php/board/note"') !== false
     && strpos($panel, 'name="ticket_id" value="7"') !== false && strpos($panel, 'maxlength="' . BoardController::NOTE_MAX . '"') !== false);
@@ -328,6 +358,9 @@ check('clamp: refresh off at 0, else 15 to 600, default 60', BoardController::no
     && BoardController::normalise(array('refresh_seconds' => '-1'))['refresh_seconds'] === 0
     && BoardController::normalise(array('refresh_seconds' => '5'))['refresh_seconds'] === 15
     && BoardController::normalise(array('refresh_seconds' => '9999'))['refresh_seconds'] === 600);
+check('setting: next ticket after closing on by default, can be switched off', BoardController::normalise(array())['next_after_close'] === true
+    && BoardController::normalise(array('next_after_close' => false))['next_after_close'] === false
+    && BoardController::normalise(array('next_after_close' => 0))['next_after_close'] === false);
 check('clamp: column limits text capped', strlen(BoardController::normalise(array('wip_limits' => str_repeat('a', 900)))['wip_limits']) === 500);
 
 // -------------------------------------------------------- output buffering

@@ -22,6 +22,7 @@ final class BoardController
         'max_cards'       => 300,
         'wip_limits'      => '',
         'refresh_seconds' => 60,
+        'next_after_close' => true,
     );
 
     public static function configure(array $raw): void
@@ -49,6 +50,7 @@ final class BoardController
             'wip_limits'      => substr((string) ($raw['wip_limits'] ?? ''), 0, 500),
             // 0 is off; anything else between 15 seconds and 10 minutes.
             'refresh_seconds' => $refresh <= 0 ? 0 : max(15, min(600, $refresh)),
+            'next_after_close' => (bool) ($raw['next_after_close'] ?? true),
         );
     }
 
@@ -100,6 +102,7 @@ final class BoardController
             'queue_action'  => $base,
             'search_url'    => ROOT_PATH . 'scp/tickets.php',
             'panel_url'     => $base . '/panel/',
+            'next_after_close' => $s['next_after_close'],
             'sort'          => $view['sort'],
             'group'         => $view['group'],
             'lanes'         => $lanes,
@@ -229,44 +232,290 @@ final class BoardController
             return self::json(400, array('error' => 'csrf'));
         }
 
-        $ticketId = (int) ($_POST['ticket_id'] ?? 0);
-        $statusId = (int) ($_POST['status_id'] ?? 0);
-
         // Unknown and invisible tickets answer the same, so the endpoint
         // cannot be used to probe which ticket IDs exist.
-        $ticket = $ticketId > 0 ? Ticket::lookup($ticketId) : null;
-        if (!$ticket || !$ticket->checkStaffPerm($thisstaff)) {
+        $ticket = self::visibleTicket($thisstaff, $_POST['ticket_id'] ?? 0);
+        if (!$ticket) {
             return self::json(404, array('error' => 'not_found'));
         }
 
+        list($code, $payload) = self::changeStatus($ticket, $thisstaff, (int) ($_POST['status_id'] ?? 0));
+        return self::json($code, $payload);
+    }
+
+    private static function visibleTicket($staff, $rawId)
+    {
+        $id = is_scalar($rawId) ? (int) $rawId : 0;
+        $ticket = $id > 0 ? Ticket::lookup($id) : null;
+        return $ticket && $ticket->checkStaffPerm($staff) ? $ticket : null;
+    }
+
+    /**
+     * Status change with the core dialog's permission matrix. Shared by drag
+     * and drop and the quick view, so both refuse the same things.
+     *
+     * @return array{0:int, 1:array}  HTTP code and JSON payload
+     */
+    private static function changeStatus($ticket, $staff, int $statusId): array
+    {
         $status = $statusId > 0 ? TicketStatus::lookup($statusId) : null;
         $state = $status ? strtolower((string) $status->getState()) : '';
         if (!$status || !in_array($state, array('open', 'closed'), true)) {
-            return self::json(422, array('error' => 'invalid_status'));
+            return array(422, array('error' => 'invalid_status'));
         }
+        $before = $ticket->getStatus();
+        $previous = $before ? array('id' => (int) $before->getId(), 'name' => (string) $before->getLocalName()) : null;
         if ((int) $ticket->getStatusId() === (int) $status->getId()) {
-            return self::json(200, array('ok' => true, 'unchanged' => true));
+            return array(200, array('ok' => true, 'unchanged' => true, 'previous' => $previous));
         }
 
-        $error = self::permissionError($ticket, $thisstaff, $state);
+        $error = self::permissionError($ticket, $staff, $state);
         if ($error !== null) {
-            return self::json(403, array('error' => $error));
+            return array(403, array('error' => $error));
         }
 
         $errors = array();
         if (!$ticket->setStatus($status, '', $errors)) {
             // 422, not 409: Http::header_code_verbose() maps unknown codes to 500.
-            return self::json(422, array(
-                'error'   => 'rejected',
-                'message' => is_array($errors) && isset($errors['err']) ? strip_tags((string) $errors['err']) : '',
-            ));
+            return array(422, array('error' => 'rejected', 'message' => self::firstError($errors)));
         }
 
-        return self::json(200, array(
-            'ok'     => true,
-            'ticket' => (int) $ticket->getId(),
-            'status' => array('id' => (int) $status->getId(), 'name' => (string) $status->getLocalName(), 'state' => $state),
+        return array(200, array(
+            'ok'       => true,
+            'ticket'   => (int) $ticket->getId(),
+            'status'   => array('id' => (int) $status->getId(), 'name' => (string) $status->getLocalName(), 'state' => $state),
+            'previous' => $previous,
         ));
+    }
+
+    private static function firstError($errors): string
+    {
+        if (!is_array($errors) || !$errors) {
+            return '';
+        }
+        $e = $errors['err'] ?? reset($errors);
+        return strip_tags(is_array($e) ? (string) reset($e) : (string) $e);
+    }
+
+    // ------------------------------------------------------------------
+    // Quick-view actions: /scp/ajax.php/board/act
+    // ------------------------------------------------------------------
+
+    /**
+     * Runs one quick-view action without osTicket's dialog: status, claim,
+     * release, mark (un)answered, assign to an agent or team, transfer,
+     * priority. Every action goes through the same core form or method as
+     * its dialog, behind the same permission check as the dialog's handler
+     * in include/ajax.tickets.php.
+     *
+     * If `note` carries text, it is stored as an internal note (plain text)
+     * after the action succeeded, so a note never lands on an action that
+     * didn't happen.
+     */
+    public static function staffAct(): string
+    {
+        global $thisstaff, $ost;
+
+        header('Cache-Control: no-store');
+        if (!self::$settings['enable_staff'] || !($thisstaff instanceof Staff)) {
+            return self::json(404, array('error' => 'not_found'));
+        }
+        if (self::staffGated($thisstaff)) {
+            return self::json(403, array('error' => 'account_action_required'));
+        }
+        if (!$ost || !$ost->checkCSRFToken()) {
+            return self::json(400, array('error' => 'csrf'));
+        }
+
+        $ticket = self::visibleTicket($thisstaff, $_POST['ticket_id'] ?? 0);
+        if (!$ticket) {
+            return self::json(404, array('error' => 'not_found'));
+        }
+
+        $act = is_string($_POST['act'] ?? null) ? $_POST['act'] : '';
+        if (!in_array($act, BoardActions::ACTS, true)) {
+            return self::json(422, array('error' => 'invalid_action'));
+        }
+        $value = is_string($_POST['value'] ?? null) ? trim($_POST['value']) : '';
+
+        $note = null;
+        $rawNote = $_POST['note'] ?? '';
+        if (is_string($rawNote) && trim($rawNote) !== '') {
+            $note = self::noteText($rawNote);
+            if ($note === null) {
+                return self::json(422, array('error' => 'invalid_note'));
+            }
+        }
+
+        list($code, $payload) = self::runAct($ticket, $thisstaff, $act, $value);
+        if ($code !== 200 || empty($payload['ok'])) {
+            return self::json($code, $payload);
+        }
+
+        if ($note !== null) {
+            $errors = array();
+            $payload['note'] = $ticket->postNote(array('title' => '', 'note' => new TextThreadEntryBody($note)),
+                $errors, $thisstaff) ? 'saved' : 'failed';
+        }
+        return self::json(200, $payload);
+    }
+
+    /** @return array{0:int, 1:array} */
+    private static function runAct($ticket, $staff, string $act, string $value): array
+    {
+        $denied = array(403, array('error' => 'forbidden'));
+        $ok = array(200, array('ok' => true, 'ticket' => (int) $ticket->getId()));
+        $errors = array();
+
+        switch ($act) {
+            case 'status':
+                return ctype_digit($value)
+                    ? self::changeStatus($ticket, $staff, (int) $value)
+                    : array(422, array('error' => 'invalid_status'));
+
+            case 'claim':
+                // TicketsAjaxAPI::claim()
+                if (!$ticket->checkStaffPerm($staff, Ticket::PERM_ASSIGN) || !$ticket->isOpen() || $ticket->getStaff()) {
+                    return $denied;
+                }
+                $form = $ticket->getClaimForm();
+                if (!$form->isValid() || !$ticket->claim($form, $errors)) {
+                    return array(422, array('error' => 'rejected', 'message' => self::firstError($errors)));
+                }
+                return $ok;
+
+            case 'release':
+                // TicketsAjaxAPI::release(): every current assignment.
+                if (!$ticket->checkStaffPerm($staff, Ticket::PERM_RELEASE) && !$staff->isManager()) {
+                    return $denied;
+                }
+                $agent = $ticket->getStaff();
+                $team = $ticket->getTeam();
+                if (!$agent && !$team) {
+                    return array(422, array('error' => 'not_assigned'));
+                }
+                $vars = array();
+                if ($agent) {
+                    $vars['sid'] = array($agent->getId());
+                }
+                if ($team) {
+                    $vars['tid'] = array($team->getId());
+                }
+                if (!$ticket->release($vars, $errors)) {
+                    return array(422, array('error' => 'rejected', 'message' => self::firstError($errors)));
+                }
+                $data = array();
+                if ($agent && !$ticket->getStaff()) {
+                    $data['staff'] = array($agent->getId(), (string) $agent->getName()->getOriginal());
+                }
+                if ($team && !$ticket->getTeam()) {
+                    $data['team'] = $team->getId();
+                }
+                $ticket->logEvent('released', $data);
+                return $ok;
+
+            case 'answered':
+            case 'unanswered':
+                // TicketsAjaxAPI::markAs()
+                if (!$ticket->checkStaffPerm($staff, Ticket::PERM_MARKANSWERED) && !$staff->isManager($ticket->getDept())) {
+                    return $denied;
+                }
+                if (!$ticket->isOpen()) {
+                    return array(422, array('error' => 'not_open'));
+                }
+                $done = $act === 'answered' ? $ticket->markAnswered() : $ticket->markUnAnswered();
+                if (!$done) {
+                    return array(422, array('error' => 'rejected'));
+                }
+                $ticket->logActivity(sprintf(__('Ticket Marked %s'), ucfirst($act)),
+                    sprintf(__('Ticket flagged as %s by %s'), $act, $staff->getName()));
+                return $ok;
+
+            case 'assign_agent':
+            case 'assign_team':
+                // TicketsAjaxAPI::assign()
+                $target = $act === 'assign_agent' ? 'agents' : 'teams';
+                $prefix = $act === 'assign_agent' ? 's' : 't';
+                if (!$ticket->checkStaffPerm($staff, Ticket::PERM_ASSIGN) || !$ticket->isOpen()) {
+                    return $denied;
+                }
+                if (!preg_match('/^' . $prefix . '\d+$/', $value)
+                    || !self::isOption(self::assignChoices($ticket, $target), $value)) {
+                    return array(422, array('error' => 'invalid_value'));
+                }
+                $form = $ticket->getAssignmentForm(array('assignee' => array($value), 'comments' => ''),
+                    array('target' => $target));
+                if (!$form || !$form->isValid() || !$ticket->assign($form, $errors)) {
+                    return array(422, array('error' => 'rejected', 'message' => self::firstError($errors ?: ($form ? $form->errors() : array()))));
+                }
+                return $ok;
+
+            case 'transfer':
+                // TicketsAjaxAPI::transfer()
+                if (!$ticket->checkStaffPerm($staff, Ticket::PERM_TRANSFER)) {
+                    return $denied;
+                }
+                if (!ctype_digit($value) || !self::isOption(self::deptChoices($ticket), $value)) {
+                    return array(422, array('error' => 'invalid_value'));
+                }
+                $form = $ticket->getTransferForm(array('dept' => array((int) $value), 'refer' => false, 'comments' => ''));
+                if (!$form->isValid() || !$ticket->transfer($form, $errors)) {
+                    return array(422, array('error' => 'rejected', 'message' => self::firstError($errors ?: $form->errors())));
+                }
+                return $ok;
+
+            case 'priority':
+                // TicketsAjaxAPI::editField() for the priority field.
+                if (!$ticket->checkStaffPerm($staff, Ticket::PERM_EDIT) || !($field = $ticket->getField('priority'))) {
+                    return $denied;
+                }
+                if (!ctype_digit($value) || !self::isOption(self::priorityChoices($ticket), $value)) {
+                    return array(422, array('error' => 'invalid_value'));
+                }
+                $source = array();
+                foreach ($field->getFormNames() as $name) {
+                    $source[$name] = $value;
+                }
+                $form = $field->getEditForm($source);
+                if (!$form->isValid() || !$ticket->updateField($form, $errors)) {
+                    return array(422, array('error' => 'rejected', 'message' => self::firstError($errors ?: $form->errors())));
+                }
+                return $ok;
+        }
+
+        return array(422, array('error' => 'invalid_action'));
+    }
+
+    // Choice lists, taken from the very fields the core dialogs render.
+
+    private static function assignChoices($ticket, string $target): array
+    {
+        $form = $ticket->getAssignmentForm(null, array('target' => $target));
+        $field = $form ? $form->getField('assignee') : null;
+        return $field ? BoardActions::options($field->getChoices()) : array();
+    }
+
+    private static function deptChoices($ticket): array
+    {
+        $field = $ticket->getTransferForm()->getField('dept');
+        return $field ? BoardActions::options($field->getChoices(), (string) $ticket->getDeptId()) : array();
+    }
+
+    private static function priorityChoices($ticket): array
+    {
+        $field = $ticket->getField('priority');
+        $current = $field && $field->getAnswer() ? (string) $field->getAnswer()->getIdValue() : null;
+        return $field ? BoardActions::options($field->getChoices(), $current) : array();
+    }
+
+    private static function isOption(array $options, string $value): bool
+    {
+        foreach ($options as $o) {
+            if ($o['value'] === $value) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -339,6 +588,25 @@ final class BoardController
         }
         $actions = BoardActions::build(self::facts($ticket, $thisstaff), $statuses, $strings);
 
+        // Lists for the in-panel pickers, only for actions the agent gets.
+        $menus = array();
+        foreach ($actions as $a) {
+            switch ($a['menu'] ?? '') {
+                case 'agents':
+                    $menus['agents'] = self::assignChoices($ticket, 'agents');
+                    break;
+                case 'teams':
+                    $menus['teams'] = self::assignChoices($ticket, 'teams');
+                    break;
+                case 'depts':
+                    $menus['depts'] = self::deptChoices($ticket);
+                    break;
+                case 'priority':
+                    $menus['priority'] = self::priorityChoices($ticket);
+                    break;
+            }
+        }
+
         // The core preview template reads $ticket, $thisstaff and $cfg from
         // the including scope, like TicketsAjaxAPI::previewTicket().
         ob_start();
@@ -352,7 +620,9 @@ final class BoardController
             'subject'      => (string) $ticket->getSubject(),
             'ticket_url'   => ROOT_PATH . 'scp/tickets.php?id=' . (int) $ticket->getId(),
             'note_url'     => ROOT_PATH . BoardPlugin::STAFF_BASE . '/note',
+            'act_url'      => ROOT_PATH . BoardPlugin::STAFF_BASE . '/act',
             'actions'      => $actions,
+            'menus'        => $menus,
             'preview_html' => $preview,
             'strings'      => $strings,
         )), 'text/html');
