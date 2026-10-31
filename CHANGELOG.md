@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
+### Added
+
+- Board as the agents' start page after login, setting "Board as start page", on by default. A login from a link keeps its target, a pending password change or 2FA step comes first, and the Tickets tab is unchanged.
+- Settings "Next ticket after changing to" (open statuses that move on like closing does) and "Next ticket from these columns" (work-through columns such as triage: the quick view moves to the next card of the same column and closes when it is empty), with "Actions that move on in these columns" to count assign, transfer, priority or mark answered as well as status changes.
+
 ## [0.2.0] - 2026-10-31
 
 ### Added
@@ -40,6 +47,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/studio-prisma/osticket-plugin-board/releases/tag/v0.1.0

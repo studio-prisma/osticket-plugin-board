@@ -13,11 +13,11 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 
 | | Agenten-Panel | Kundenportal |
 |---|---|---|
-| Wo | Applications → Board (`/scp/ajax.php/board`) | „Board" in der Portal-Navigation (`/ajax.php/board`) |
+| Wo | Applications → Board (`/scp/ajax.php/board`), und die Startseite nach dem Login (Einstellung) | „Board" in der Portal-Navigation (`/ajax.php/board`) |
 | Welche Tickets | Genau das, was Abteilungen, Zuweisungen und Weiterleitungen des Agenten erlauben (`Staff::getTicketsVisibility()`, wie in den Queues) | Eigene Tickets, Tickets der Organisation, wenn die Organisation sie teilt, und Mitwirkungen, wenn aktiviert (dieselben drei Quellen wie die Ticketliste im Portal) |
 | Filter | Jede Queue und gespeicherte Suche des Agenten-Panels, über dem Board auswählbar, pro Sitzung gemerkt | Nein |
 | Status ändern | Drag and Drop, oder `Alt+←` / `Alt+→` auf einer fokussierten Karte. Vor dem Schließen kommt eine Rückfrage | Nein |
-| Schnellansicht | Klick oder `Enter` auf eine Karte: die Ticket-Vorschau von osTicket plus die Aktionen, die die Rolle des Agenten erlaubt. Wer ein Ticket darin schließt, landet direkt bei der nächsten offenen Karte (Einstellung) | Nein |
+| Schnellansicht | Klick oder `Enter` auf eine Karte: die Ticket-Vorschau von osTicket plus die Aktionen, die die Rolle des Agenten erlaubt. Wer ein Ticket darin schließt, landet direkt bei der nächsten offenen Karte; in Abarbeitungs-Spalten wie einem Triage-Status geht es innerhalb der Spalte weiter (Einstellungen) | Nein |
 | Aktionen | Ein Klick für Status, übernehmen, freigeben, als beantwortet markieren. Auswahllisten im Panel für Agent, Team, Abteilung und Priorität. Weiterleiten und Aufgabe anlegen öffnen die Dialoge von osTicket. Ein Statuswechsel lässt sich im Hinweis rückgängig machen | Nein |
 | Interne Notiz | Aus der Schnellansicht, als Klartext. Text im Notizfeld wird mit der nächsten Aktion gespeichert, die du anklickst | Nein |
 | Fälligkeit und Priorität | Markierungen für überfällig, heute fällig, morgen fällig sowie Priorität High/Emergency | Nein |
@@ -66,11 +66,15 @@ Kurzfassung:
 | Einstellung | Standard | Zweck |
 |---|---|---|
 | Agent board | an | Eintrag unter Applications, Routen unter `/scp/ajax.php/board` |
+| Board as start page | an | Nach dem Login landen Agenten auf dem Board statt in der Ticketliste. Ein Login über einen Link (z. B. ein Ticket aus einer Benachrichtigung) öffnet weiter diesen Link; ein ausstehender Passwortwechsel oder 2FA-Schritt kommt zuerst. Der Tab „Tickets" bleibt unverändert |
 | Client board | **aus** | Board nur zum Lesen im Portal. Aus heißt: die Route antwortet mit 404 |
 | Client navigation link | an | „Board" in der Portal-Navigation. Aus: nur per URL erreichbar |
 | Closed tickets, days | 14 | In der Standardansicht zeigen geschlossene Spalten Tickets, die in diesem Zeitraum geschlossen wurden. `0` blendet sie aus. Ist eine Queue oder Suche gewählt, entscheiden deren Kriterien |
 | Column limits | leer | Statusname und Limit, z. B. `In Progress=5; Open=20`. Wird nur markiert, nichts wird blockiert |
 | Next ticket after closing | An | Nach dem Schließen aus der Schnellansicht öffnet das Panel die nächste offene Karte. Aus: Es bleibt beim geschlossenen Ticket |
+| Next ticket after changing to | keine | Offene Status, die in der Schnellansicht gewählt ebenfalls zur nächsten offenen Karte springen, egal woher das Ticket kommt |
+| Next ticket from these columns | keine | Abarbeitungs-Spalten, z. B. ein Triage-Status. Eine Aktion an einem Ticket darin öffnet die nächste Karte derselben Spalte; ist die Spalte leer, schließt sich die Schnellansicht. Hat Vorrang vor den beiden Einstellungen darüber |
+| Actions that move on in these columns | Statuswechsel | Welche Aktionen in diesen Spalten zählen: Statuswechsel, zuweisen/übernehmen/freigeben, übergeben, Priorität, als beantwortet markieren |
 | Live refresh, seconds | 60 | Wie oft das Agenten-Board auf Änderungen prüft. `0` schaltet es ab, sonst 15 bis 600 |
 | Maximum cards per board | 300 | Tickets pro Seitenaufruf, neueste Aktivität zuerst (10 bis 2000) |
 

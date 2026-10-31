@@ -72,6 +72,7 @@ Als **Nicht-Admin**-Testagent:
 
 | # | Aktion | Erwartet |
 |---|---|---|
+| 4.0 | Abmelden, als Agent neu anmelden | Du landest auf dem Board. Der Tab „Tickets" öffnet weiter die Ticketliste |
 | 4.1 | Agenten-Panel → Applications | Eintrag „Board" |
 | 4.2 | Öffnen | Spalten für jeden offenen Status und, sofern nicht abgeschaltet, geschlossene Status |
 | 4.3 | Mit der Ticket-Queue des Agenten vergleichen | Dieselben Tickets, keines aus einer Abteilung ohne Zugriff |
@@ -84,6 +85,7 @@ Als **Nicht-Admin**-Testagent:
 | 4.10 | In der Schnellansicht: An Agent zuweisen, jemanden aus der Liste wählen | Kein Dialog; die Schnellansicht zeigt die neue Zuweisung, die Ticket-Historie listet sie |
 | 4.12 | Nach Organisation gruppieren, dann eine Karte in die Zeile einer anderen Organisation ziehen | Zeilen pro Organisation; die Karte bleibt in ihrer Zeile |
 | 4.13 | In einem zweiten Browserfenster den Status eines Tickets ändern, das Board nicht anfassen | Innerhalb des Intervalls aktualisiert sich das Board und meldet „Board updated" |
+| 4.10c | Optional: einen Triage-Status unter „Next ticket from these columns" eintragen, dann bei einem Ticket in dieser Spalte den Status aus der Schnellansicht ändern | Die Schnellansicht öffnet die nächste Karte derselben Spalte; bei der letzten schließt sie sich mit „In … ist nichts mehr übrig." |
 | 4.10b | In der Schnellansicht eine Zeile ins Notizfeld schreiben, dann bei einem Testticket einen geschlossenen Status anklicken | Kein Dialog; das Ticket ist geschlossen, die Notiz steht im Verlauf, die Schnellansicht zeigt die nächste offene Karte. „Rückgängig" im Hinweis öffnet es wieder |
 | 4.11 | Interne Notiz mit `<b>test</b>` speichern | Notiz in der Ticketansicht als wörtlicher Text, nicht fett; im Kundenportal nicht sichtbar |
 

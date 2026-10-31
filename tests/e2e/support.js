@@ -50,7 +50,8 @@ async function staffLogin(page, user, pass) {
   await page.fill('input[name="userid"]', user);
   await page.fill('input[name="passwd"]', pass);
   await page.click('#login button[type="submit"]');
-  await page.waitForURL(/\/scp\/(index|tickets)\.php|\/scp\/$/);
+  // The board is the start page after login unless a spec switches it off.
+  await page.waitForURL(/\/scp\/(index|tickets)\.php|\/scp\/$|\/scp\/ajax\.php\/board/);
 }
 
 /** Ticket numbers on the board: top-level cards and nested sub-tickets. */

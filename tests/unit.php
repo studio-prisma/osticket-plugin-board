@@ -361,6 +361,42 @@ check('clamp: refresh off at 0, else 15 to 600, default 60', BoardController::no
 check('setting: next ticket after closing on by default, can be switched off', BoardController::normalise(array())['next_after_close'] === true
     && BoardController::normalise(array('next_after_close' => false))['next_after_close'] === false
     && BoardController::normalise(array('next_after_close' => 0))['next_after_close'] === false);
+check('setting: board as start page on by default, can be switched off', BoardController::normalise(array())['staff_landing'] === true
+    && BoardController::normalise(array('staff_landing' => false))['staff_landing'] === false);
+check('landing: login without a target, or from the panel root, lands on the board', BoardLanding::isDefaultTarget(null, '/')
+    && BoardLanding::isDefaultTarget('', '/') && BoardLanding::isDefaultTarget('index.php', '/')
+    && BoardLanding::isDefaultTarget('/scp/', '/') && BoardLanding::isDefaultTarget('/scp/index.php', '/')
+    && BoardLanding::isDefaultTarget('/helpdesk/scp/', '/helpdesk/')
+    && BoardLanding::isDefaultTarget('/scp/login.php', '/') && BoardLanding::isDefaultTarget('/scp/ajax.php/tickets/5', '/'));
+check('landing: a login from a link keeps its target', !BoardLanding::isDefaultTarget('/scp/tickets.php?id=5', '/')
+    && !BoardLanding::isDefaultTarget('/scp/tickets.php', '/') && !BoardLanding::isDefaultTarget('/scp/index.php?a=1', '/')
+    && !BoardLanding::isDefaultTarget('/scp/', '/helpdesk/'));
+check('landing: only a GET of the panel start page redirects', BoardLanding::isStartPage('/scp/index.php', 'GET')
+    && BoardLanding::isStartPage('/helpdesk/scp/index.php', 'GET') && !BoardLanding::isStartPage('/scp/index.php', 'POST')
+    && !BoardLanding::isStartPage('/scp/tickets.php', 'GET') && !BoardLanding::isStartPage('/index.php', 'GET'));
+check('landing: other panel pages use up the mark, login and AJAX wait', BoardLanding::isOtherPage('/scp/tickets.php')
+    && BoardLanding::isOtherPage('/scp/users.php') && !BoardLanding::isOtherPage('/scp/login.php')
+    && !BoardLanding::isOtherPage('/scp/ajax.php') && !BoardLanding::isOtherPage('/scp/index.php')
+    && !BoardLanding::isOtherPage('/tickets.php'));
+check('landing: signed in means an agent id and no pending 2FA', BoardLanding::signedIn(array('_auth' => array('staff' => array('id' => 3, '2fa' => null))))
+    && !BoardLanding::signedIn(array('_auth' => array('staff' => array('id' => 3, '2fa' => 'email:abc:1'))))
+    && !BoardLanding::signedIn(array('_auth' => array('staff' => array('id' => 0)))) && !BoardLanding::signedIn(array()));
+$ids = '/^[1-9]\d{0,9}$/';
+check('next rules: status pickers read as stored by osTicket', BoardController::keyList(array('5' => 'Triage', '7' => 'Open'), $ids) === array('5', '7')
+    && BoardController::keyList('{"5":"Triage"}', $ids) === array('5')
+    && BoardController::keyList('5, 7', $ids) === array('5', '7')
+    && BoardController::keyList(null, $ids) === array() && BoardController::keyList('', $ids) === array());
+check('next rules: junk keys dropped', BoardController::keyList(array('0' => 'x', '-1' => 'x', '5 OR 1' => 'x', 'abc' => 'x', '9' => 'ok'), $ids) === array('9'));
+$n = BoardController::normalise(array('next_from_statuses' => array('5' => 'Triage'), 'next_to_statuses' => '{"6":"Waiting"}',
+    'next_from_actions' => array('assign' => 'x', 'delete' => 'x')));
+check('next rules: normalised to ids and known action groups', $n['next_from'] === array(5) && $n['next_to'] === array(6)
+    && $n['next_from_acts'] === array('assign'));
+$n = BoardController::normalise(array());
+check('next rules: default none, status change only', $n['next_from'] === array() && $n['next_to'] === array()
+    && $n['next_from_acts'] === array('status'));
+check('next rules: board carries them for the quick view', strpos(BoardRenderer::render(BoardModel::build($statuses, array()), array_merge($pickerCtx, array(
+    'panel_url' => '/p/', 'next_from' => array(5), 'next_to' => array(6), 'next_from_acts' => array('status', 'assign')))),
+    'data-next="{&quot;to&quot;:[6],&quot;from&quot;:[5],&quot;acts&quot;:[&quot;status&quot;,&quot;assign&quot;]}"') !== false);
 check('clamp: column limits text capped', strlen(BoardController::normalise(array('wip_limits' => str_repeat('a', 900)))['wip_limits']) === 500);
 
 // -------------------------------------------------------- output buffering

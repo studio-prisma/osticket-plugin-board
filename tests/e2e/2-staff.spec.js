@@ -186,6 +186,69 @@ test.describe('agent with a pending password change', () => {
   });
 });
 
+test.describe('board as start page', () => {
+  const NS = `plugin.${seed.plugin.id}.instance.${seed.plugin.instance}`;
+
+  async function login(page, user, pass) {
+    await page.fill('input[name="userid"]', user);
+    await page.fill('input[name="passwd"]', pass);
+    await page.click('#login button[type="submit"]');
+  }
+
+  test('login lands on the board once; the ticket list stays reachable', async ({ page }) => {
+    await page.goto('/scp/login.php');
+    await login(page, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
+    await page.waitForURL(/\/scp\/ajax\.php\/board/);
+    await expect(page.locator('.spb-board')).toHaveCount(1);
+
+    await page.goto('/scp/index.php');
+    await expect(page).toHaveURL(/\/scp\/index\.php$/);
+    await expect(page.locator('.spb-board')).toHaveCount(0);
+  });
+
+  test('a login from a ticket link opens that ticket', async ({ page }) => {
+    await page.goto(`/scp/tickets.php?id=${seed.tickets.A5}`);
+    await page.waitForURL(/login\.php/);
+    await login(page, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
+    await page.waitForURL(new RegExp(`tickets\\.php\\?id=${seed.tickets.A5}`));
+    await expect(page.locator('.spb-board')).toHaveCount(0);
+  });
+
+  test('opening the panel root after the session ran out still lands on the board', async ({ page }) => {
+    await page.goto('/scp/');
+    await page.waitForURL(/login\.php/);
+    await login(page, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
+    await page.waitForURL(/\/scp\/ajax\.php\/board/);
+  });
+
+  test('a pending password change wins over the board', async ({ page }) => {
+    sql(`UPDATE ost_staff SET change_passwd=1 WHERE username='${env.SPB_AGENT_USER}'`);
+    try {
+      await page.goto('/scp/login.php');
+      await login(page, env.SPB_AGENT_USER, env.SPB_AGENT_PASS);
+      await page.waitForURL((url) => !/login\.php/.test(url.pathname));
+      await page.waitForLoadState('load');
+      expect(page.url()).not.toMatch(/ajax\.php\/board/);
+      await expect(page.locator('.spb-board')).toHaveCount(0);
+    } finally {
+      sql(`UPDATE ost_staff SET change_passwd=0 WHERE username='${env.SPB_AGENT_USER}'`);
+    }
+  });
+
+  test('switched off: login lands on the ticket list as before', async ({ page }) => {
+    sql(`INSERT INTO ost_config (namespace, \`key\`, value, updated) VALUES ('${NS}', 'staff_landing', '0', NOW())`);
+    try {
+      await page.goto('/scp/login.php');
+      await login(page, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
+      await page.waitForURL(/\/scp\/(index|tickets)\.php|\/scp\/$/);
+      await page.waitForLoadState('load');
+      expect(page.url()).not.toMatch(/ajax\.php\/board/);
+    } finally {
+      sql(`DELETE FROM ost_config WHERE namespace='${NS}' AND \`key\`='staff_landing'`);
+    }
+  });
+});
+
 test.describe('queues and saved searches as filters', () => {
   test.beforeEach(async ({ page }) => {
     await staffLogin(page, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);

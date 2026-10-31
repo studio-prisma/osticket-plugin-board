@@ -304,6 +304,14 @@
   function initPanel(wrap, board, i18n, say, hooks) {
     var panelUrl = board.dataset.panelUrl;
     var nextAfterClose = board.dataset.nextAfterClose === '1';
+    var rules = { to: [], from: [], acts: ['status'] };
+    try {
+      rules = Object.assign(rules, JSON.parse(board.dataset.next || '{}'));
+    } catch (e) { /* defaults */ }
+    var ACT_GROUP = {
+      status: 'status', claim: 'assign', release: 'assign', assign_agent: 'assign', assign_team: 'assign',
+      transfer: 'transfer', priority: 'priority', answered: 'mark', unanswered: 'mark'
+    };
     var drawer = wrap.querySelector('.spb-drawer');
     if (!panelUrl || !drawer) return null;
     var content = drawer.querySelector('.spb-drawer-content');
@@ -382,6 +390,48 @@
       if (i < 0) return null;
       var next = cards[i + 1] || cards[i - 1];
       return next ? next.dataset.ticketId : null;
+    }
+
+    function cardOf(id) {
+      return wrap.querySelector('.spb-board .spb-cards > .spb-card[data-ticket-id="' + String(id) + '"]');
+    }
+
+    // The next card in the same column (and row, when grouped), or the one
+    // before it when this was the last; null when it was the only one.
+    function nextInColumn(id) {
+      var card = cardOf(id);
+      if (!card) return null;
+      var next = card.nextElementSibling;
+      while (next && !next.classList.contains('spb-card')) next = next.nextElementSibling;
+      var prev = card.previousElementSibling;
+      while (prev && !prev.classList.contains('spb-card')) prev = prev.previousElementSibling;
+      var other = next || prev;
+      return other ? other.dataset.ticketId : null;
+    }
+
+    /*
+     * Where the quick view goes after an action, decided from the board as
+     * it is before the action:
+     *   column  the ticket sits in a work-through column (settings) and the
+     *           action counts there: next card of that column
+     *   board   it was closed, or set to a status configured to move on:
+     *           next open card anywhere on the board
+     *   stay    anything else
+     */
+    function afterAct(id, act, btn) {
+      var card = cardOf(id);
+      var col = card && card.closest('.spb-col');
+      var from = col ? Number(col.dataset.statusId) : 0;
+      if (from && rules.from.indexOf(from) >= 0 && rules.acts.indexOf(ACT_GROUP[act]) >= 0) {
+        return { mode: 'column', next: nextInColumn(id), column: col.dataset.statusName || '' };
+      }
+      if (act === 'status') {
+        var to = Number(btn.dataset.value);
+        if ((btn.dataset.state === 'closed' && nextAfterClose) || rules.to.indexOf(to) >= 0) {
+          return { mode: 'board', next: nextOpenCard(id) };
+        }
+      }
+      return { mode: 'stay', next: id };
     }
 
     function reloadWithPanel(id) {
@@ -484,10 +534,8 @@
       var act = btn.dataset.spbAct;
       var field = drawer.querySelector('#spb-note-text');
       var note = field ? field.value.trim() : '';
-      // Closing moves on to the next open card, so a triage run doesn't
-      // need a click per ticket. Decided from the board as it is now.
-      var closing = act === 'status' && btn.dataset.state === 'closed';
-      var then = closing && nextAfterClose ? nextOpenCard(id) : id;
+      var after = afterAct(id, act, btn);
+      var then = after.next;
       closeMenus(null);
       setBusy(true);
       runAct(id, act, btn.dataset.value || '', note)
@@ -501,6 +549,7 @@
           var text = String(i18n.act_done || 'Done.');
           if (r.data.note === 'saved') text += ' ' + String(i18n.act_note || '');
           if (r.data.note === 'failed') text += ' ' + String(i18n.note_failed || '');
+          if (after.mode === 'column' && !then) text += ' ' + fmt(String(i18n.column_done || ''), after.column);
           var prev = act === 'status' && !r.data.unchanged && r.data.previous ? r.data.previous : null;
           say(text, r.data.note === 'failed', prev ? {
             label: String(i18n.undo || 'Undo'),

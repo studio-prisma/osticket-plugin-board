@@ -32,6 +32,16 @@ class BoardConfig extends PluginConfig
                 ),
             )),
 
+            'staff_landing' => new BooleanField(array(
+                'label'         => 'Board as start page',
+                'default'       => true,
+                'configuration' => array(
+                    'desc' => 'After logging in, agents land on the board instead of the '
+                            . 'ticket list. A login from a link, e.g. a ticket in an alert '
+                            . 'mail, still opens that link. The Tickets tab is unchanged.',
+                ),
+            )),
+
             'enable_client' => new BooleanField(array(
                 'label'         => 'Client board',
                 'default'       => false,
@@ -59,6 +69,42 @@ class BoardConfig extends PluginConfig
                     'desc' => 'When a ticket is closed from the quick view, open the next '
                             . 'open card on the board instead of staying on the closed one.',
                 ),
+            )),
+
+            'next_to_statuses' => new ChoiceField(array(
+                'label'         => 'Next ticket after changing to',
+                'default'       => '',
+                'choices'       => self::openStatuses(),
+                'hint'          => 'Open statuses that, picked in the quick view, move on to the next '
+                                 . 'open card on the board, wherever the ticket came from. Closed '
+                                 . 'statuses are covered by the setting above.',
+                'configuration' => array('multiselect' => true, 'prompt' => 'None'),
+            )),
+
+            'next_from_statuses' => new ChoiceField(array(
+                'label'         => 'Next ticket from these columns',
+                'default'       => '',
+                'choices'       => self::openStatuses(),
+                'hint'          => 'Work-through columns such as a triage status: an action in the '
+                                 . 'quick view on a ticket in one of them opens the next card of the '
+                                 . 'same column. When the column is empty, the quick view closes. '
+                                 . 'Takes precedence over the two settings above.',
+                'configuration' => array('multiselect' => true, 'prompt' => 'None'),
+            )),
+
+            'next_from_actions' => new ChoiceField(array(
+                'label'         => 'Actions that move on in these columns',
+                'default'       => '',
+                'choices'       => array(
+                    'status'   => 'Status change',
+                    'assign'   => 'Assign, claim, release',
+                    'transfer' => 'Transfer to department',
+                    'priority' => 'Change priority',
+                    'mark'     => 'Mark answered or unanswered',
+                ),
+                'hint'          => 'Which quick-view actions count as done in the columns above. '
+                                 . 'None selected: status change only.',
+                'configuration' => array('multiselect' => true, 'prompt' => 'Status change only'),
             )),
 
             'sec_limits' => new SectionBreakField(array(
@@ -98,5 +144,24 @@ class BoardConfig extends PluginConfig
                 'configuration' => array('size' => 6, 'length' => 5, 'validator' => 'number'),
             )),
         );
+    }
+
+    /**
+     * Open statuses for the pickers, id => name. Plain SQL on purpose: the
+     * config is built during plugin bootstrap, before osTicket has loaded
+     * what TicketStatus::getLocalName() needs.
+     */
+    private static function openStatuses(): array
+    {
+        $out = array();
+        if (!function_exists('db_query') || !defined('TICKET_STATUS_TABLE')) {
+            return $out;
+        }
+        $res = db_query("SELECT id, name FROM " . TICKET_STATUS_TABLE
+            . " WHERE state = 'open' ORDER BY sort, name");
+        while ($res && ($row = db_fetch_array($res))) {
+            $out[(string) (int) $row['id']] = (string) $row['name'];
+        }
+        return $out;
     }
 }
