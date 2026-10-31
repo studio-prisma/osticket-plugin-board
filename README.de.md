@@ -17,9 +17,9 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 | Welche Tickets | Genau das, was Abteilungen, Zuweisungen und Weiterleitungen des Agenten erlauben (`Staff::getTicketsVisibility()`, wie in den Queues) | Eigene Tickets, Tickets der Organisation, wenn die Organisation sie teilt, und Mitwirkungen, wenn aktiviert (dieselben drei Quellen wie die Ticketliste im Portal) |
 | Filter | Jede Queue und gespeicherte Suche des Agenten-Panels, über dem Board auswählbar, pro Sitzung gemerkt | Nein |
 | Status ändern | Drag and Drop, oder `Alt+←` / `Alt+→` auf einer fokussierten Karte. Vor dem Schließen kommt eine Rückfrage | Nein |
-| Schnellansicht | Klick oder `Enter` auf eine Karte: die Ticket-Vorschau von osTicket plus die Aktionen, die die Rolle des Agenten erlaubt. Wer ein Ticket darin schließt, landet direkt bei der nächsten offenen Karte | Nein |
-| Aktionen | Status mit Kommentar, an Agent oder Team zuweisen, übernehmen, freigeben, an Abteilung übergeben, weiterleiten, als beantwortet markieren, Priorität ändern, Aufgabe anlegen: alles über die Dialoge von osTicket | Nein |
-| Interne Notiz | Aus der Schnellansicht, als Klartext | Nein |
+| Schnellansicht | Klick oder `Enter` auf eine Karte: die Ticket-Vorschau von osTicket plus die Aktionen, die die Rolle des Agenten erlaubt. Wer ein Ticket darin schließt, landet direkt bei der nächsten offenen Karte (Einstellung) | Nein |
+| Aktionen | Ein Klick für Status, übernehmen, freigeben, als beantwortet markieren. Auswahllisten im Panel für Agent, Team, Abteilung und Priorität. Weiterleiten und Aufgabe anlegen öffnen die Dialoge von osTicket. Ein Statuswechsel lässt sich im Hinweis rückgängig machen | Nein |
+| Interne Notiz | Aus der Schnellansicht, als Klartext. Text im Notizfeld wird mit der nächsten Aktion gespeichert, die du anklickst | Nein |
 | Fälligkeit und Priorität | Markierungen für überfällig, heute fällig, morgen fällig sowie Priorität High/Emergency | Nein |
 | Sortierung | Zuletzt geändert, Fälligkeit, Priorität, neueste, Nummer; pro Sitzung gemerkt | Nein |
 | Gruppierung | Zeilen pro Organisation, zuständiger Person (oder Team) oder Abteilung, Spaltenköpfe mit Summen oben | Nein |
@@ -30,7 +30,7 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 
 **Die Filter sind die von osTicket.** Das Board hat kein eigenes Filtersystem. Die Auswahl „Ansicht" listet die Queues und gespeicherten Suchen, die der Agent unter Tickets sieht, mit derselben Zugriffsprüfung (öffentliche Queues, eigene private Suchen, nie die eines anderen Agenten). Filter legt man an und speichert sie dort, wo man es gewohnt ist: Tickets, dann Suche, dann Speichern. Das Board übernimmt ihre Kriterien und dieselben Sichtbarkeitsregeln wie die Ticketliste. Unter-Tickets, die eine Queue als Zeilen ausblendet, erscheinen trotzdem eingeklappt unter dem Eltern-Ticket, beschränkt auf das, was der Agent sehen darf.
 
-**Die Aktionen sind die von osTicket.** Die Schnellansicht bietet nur an, was die Ticketansicht demselben Agenten anbieten würde, und jeder Button öffnet denselben Core-Dialog wie die Ticketansicht (`scp/ajax.php/tickets/{id}/...`). Rechte, Formulare, Benachrichtigungen und Ticket-Historie kommen aus osTicket. Der einzige eigene Schreibweg des Plugins neben Drag and Drop ist die interne Notiz. Sie endet im `Ticket::postNote()` des Cores und wird als Klartext gespeichert.
+**Die Aktionen laufen über den Code von osTicket.** Die Schnellansicht bietet nur an, was die Ticketansicht demselben Agenten anbieten würde. Status, übernehmen, freigeben, als beantwortet markieren, zuweisen, übergeben und Priorität laufen per Klick über `/board/act`. Der Endpunkt prüft dieselben Rollenrechte wie der Core-Dialog und ruft dann dieselben Core-Methoden mit denselben Formularen auf (`setStatus()`, `claim()`, `release()`, `markAnswered()`, `assign()`, `transfer()`, `updateField()`). Die Auswahllisten zeigen nur, was auch der Core-Dialog zeigen würde, alles andere lehnt der Endpunkt ab. Benachrichtigungen und Ticket-Historie kommen aus osTicket. Weiterleiten und Aufgabe anlegen öffnen weiter die Core-Dialoge. Notizen enden im `Ticket::postNote()` des Cores und werden als Klartext gespeichert.
 
 Unter-Tickets kommen aus `ost_ticket.ticket_pid`. In diese Spalte schreiben die Merge-Funktion von osTicket und die gängigen Unter-Ticket-Plugins. Thread-Einträge werden nie geladen, interne Notizen können also auf keinem der beiden Boards landen.
 
@@ -70,6 +70,7 @@ Kurzfassung:
 | Client navigation link | an | „Board" in der Portal-Navigation. Aus: nur per URL erreichbar |
 | Closed tickets, days | 14 | In der Standardansicht zeigen geschlossene Spalten Tickets, die in diesem Zeitraum geschlossen wurden. `0` blendet sie aus. Ist eine Queue oder Suche gewählt, entscheiden deren Kriterien |
 | Column limits | leer | Statusname und Limit, z. B. `In Progress=5; Open=20`. Wird nur markiert, nichts wird blockiert |
+| Next ticket after closing | An | Nach dem Schließen aus der Schnellansicht öffnet das Panel die nächste offene Karte. Aus: Es bleibt beim geschlossenen Ticket |
 | Live refresh, seconds | 60 | Wie oft das Agenten-Board auf Änderungen prüft. `0` schaltet es ab, sonst 15 bis 600 |
 | Maximum cards per board | 300 | Tickets pro Seitenaufruf, neueste Aktivität zuerst (10 bis 2000) |
 
@@ -108,7 +109,8 @@ Nicht geprüft: osTicket 1.17, Nginx, MySQL statt MariaDB, andere Portal-Themes 
 - **Eine verschobene Karte bleibt bis zum Neuladen.** Fällt ein Ticket durch den Statuswechsel aus der gewählten Queue (etwa beim Schließen in „Open"), bleibt die Karte bis zum Neuladen in ihrer neuen Spalte.
 - **Suchkriterien, die osTicket nicht unterstützt, werden ignoriert**, auf dem Board wie in der Ticketliste. Das ist das Verhalten von osTicket bei gespeicherten Suchen, kein Filter des Plugins.
 - **Keine Antwort an Kunden aus dem Board.** Antworten bleiben in der Ticketansicht (die Schnellansicht verlinkt dorthin). Als überfällig markieren, zusammenführen, verknüpfen und das komplette Bearbeiten-Formular gibt es ebenfalls nicht, sie sind einen Klick entfernt in der Ticketansicht.
-- **Nach einer Dialog-Aktion lädt das Board neu.** Die Schnellansicht öffnet sich wieder für dasselbe Ticket, nach dem Schließen dagegen für die nächste offene Karte in Board-Reihenfolge (weiter unten in der Spalte, dann die nächste offene Spalte). Ist keine offene Karte mehr übrig, schließt sich das Panel.
+- **Direkte Aktionen haben kein Kommentarfeld wie der Core-Dialog.** Ein Statuswechsel aus der Schnellansicht trägt keinen eigenen Kommentar. Wer vorher ins Notizfeld schreibt, bekommt den Text als interne Notiz zum Wechsel. Die Antwort an Kunden bleibt in der Ticketansicht.
+- **Nach einer Aktion bleibt die Schnellansicht beim Ticket**, nach dem Schließen mit „Next ticket after closing" dagegen springt sie zur nächsten offenen Karte in Board-Reihenfolge (weiter unten in der Spalte, dann die nächste offene Spalte). Ist keine offene Karte mehr übrig, schließt sich das Panel. Rückgängig setzt den vorigen Status wieder; eine mitgespeicherte Notiz bleibt stehen.
 - **Notizen aus dem Board übergehen den Ticket-Lock.** Der Lock von osTicket schützt nur die Formulare der Ticketansicht vor doppeltem Absenden; die Notiz selbst läuft über dasselbe `Ticket::postNote()`.
 - **Zeilen wechseln nicht die Zuständigkeit.** In der gruppierten Ansicht wandert eine Karte nur innerhalb ihrer Zeile zwischen den Status; in die Zeile einer anderen Organisation oder Person fallen lassen bewirkt nichts. Neu zuweisen geht über die Schnellansicht.
 - **Fälligkeits-Markierungen zeigen, was Aufmerksamkeit braucht:** überfällig, heute, morgen. Ein Termin in einigen Tagen (oft nur die Standard-SLA) bekommt keine Markierung; „Sortierung: Fälligkeit" ordnet trotzdem danach.

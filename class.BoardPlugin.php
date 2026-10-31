@@ -9,7 +9,7 @@ declare(strict_types=1);
  *
  *   Agent panel   Application::registerStaffApp() adds the entry under
  *                 "Applications". The ajax.scp signal of scp/ajax.php receives
- *                 /board, /board/move, /board/state, /board/panel/{id},
+ *                 /board, /board/move, /board/act, /board/state, /board/panel/{id},
  *                 /board/note and /board/assets/*.
  *   Client portal The ajax.client signal of ajax.php receives /board and
  *                 /board/assets/*. The navigation entry is placed into the
@@ -78,6 +78,7 @@ class BoardPlugin extends Plugin
             'max_cards'       => $config->get('max_cards'),
             'wip_limits'      => $config->get('wip_limits'),
             'refresh_seconds' => $config->get('refresh_seconds'),
+            'next_after_close' => $config->get('next_after_close'),
         ));
         $s = BoardController::settings();
 
@@ -123,6 +124,9 @@ class BoardPlugin extends Plugin
         }));
         $dispatcher->append(url_post('^/board/note$', static function () {
             return BoardController::staffNote();
+        }));
+        $dispatcher->append(url_post('^/board/act$', static function () {
+            return BoardController::staffAct();
         }));
         $dispatcher->append(url_get('^/board/assets/(board\.css|board\.js)$', static function ($name) {
             return BoardController::asset((string) $name);

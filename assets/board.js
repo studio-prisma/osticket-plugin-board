@@ -73,19 +73,31 @@
 
     // Toast: shows, then gets out of the way. Errors stay longer.
     var sayTimer = null;
-    function say(text, isError) {
+    function say(text, isError, action) {
       if (!statusLine) return;
       clearTimeout(sayTimer);
       statusLine.classList.remove('spb-fading');
       statusLine.textContent = text;
       statusLine.classList.toggle('spb-error', !!isError);
+      if (action) {
+        var undo = document.createElement('button');
+        undo.type = 'button';
+        undo.className = 'spb-toast-action';
+        undo.textContent = action.label;
+        undo.addEventListener('click', function () {
+          undo.disabled = true;
+          action.run();
+        });
+        statusLine.appendChild(document.createTextNode(' '));
+        statusLine.appendChild(undo);
+      }
       sayTimer = setTimeout(function () {
         statusLine.classList.add('spb-fading');
         sayTimer = setTimeout(function () {
           statusLine.textContent = '';
           statusLine.classList.remove('spb-fading');
         }, 260);
-      }, isError ? 6000 : 3200);
+      }, isError ? 6000 : (action ? 8000 : 3200));
     }
 
     // Columns a card can move between: its own row when grouped.
@@ -238,8 +250,15 @@
     });
     wrap.addEventListener('pointermove', touched, { passive: true });
 
-    var panel = initPanel(wrap, first, i18n, say);
-    var live = initLive(wrap, i18n, say, {
+    var live = null;
+    var panel = initPanel(wrap, first, i18n, say, {
+      board: board,
+      reload: function () {
+        if (live) live.expectOwnChange();
+        return fetchBoard(wrap).then(refreshCounts);
+      }
+    });
+    live = initLive(wrap, i18n, say, {
       board: board,
       idle: function () {
         var popup = document.getElementById('popup');
@@ -257,15 +276,34 @@
     refreshCounts();
   }
 
+  // Replaces the board with the one from a fresh copy of this page.
+  function fetchBoard(wrap) {
+    return fetch(location.pathname + location.search, { credentials: 'same-origin' })
+      .then(function (res) {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.text();
+      })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var fresh = doc.querySelector('.spb-wrap .spb-board');
+        if (!fresh) throw new Error('no board');
+        wrap.querySelector('.spb-board').replaceWith(document.adoptNode(fresh));
+        return fresh;
+      });
+  }
+
   /*
    * Quick view. The panel HTML comes from the board's own endpoint: buttons
    * and form escaped server-side, plus osTicket's ticket preview template.
-   * Actions open osTicket's own dialogs through $.dialog() from scp.js, the
-   * same way the ticket view's action menu does. After a dialog succeeds,
-   * the board reloads and reopens the panel for that ticket.
+   * Most actions run on click through /board/act, which applies the same
+   * permission checks as osTicket's own dialogs; pickers for agent, team,
+   * department and priority open inside the panel. Text in the note field
+   * goes along with whichever action runs. Refer and add task still open
+   * osTicket's dialogs through $.dialog() from scp.js.
    */
-  function initPanel(wrap, board, i18n, say) {
+  function initPanel(wrap, board, i18n, say, hooks) {
     var panelUrl = board.dataset.panelUrl;
+    var nextAfterClose = board.dataset.nextAfterClose === '1';
     var drawer = wrap.querySelector('.spb-drawer');
     if (!panelUrl || !drawer) return null;
     var content = drawer.querySelector('.spb-drawer-content');
@@ -384,16 +422,113 @@
         location.href = 'tickets.php?id=' + encodeURIComponent(id);
         return;
       }
-      // Closing a ticket from the quick view moves on to the next one, so a
-      // triage run doesn't need a click per ticket to leave the closed one.
-      // Decided before the dialog opens, from the board as it is now.
-      var then = /\/status\/close\//.test(path) ? nextOpenCard(id) : id;
       // Relative on purpose: the page sets <base href=".../scp/">, exactly
       // what the dialog's own form submission relies on.
       $.dialog('ajax.php/' + path + '?_uid=' + Date.now(), [201], function () {
-        reloadWithPanel(then);
+        reloadWithPanel(id);
       });
     });
+
+    // Pickers: one open at a time, toggled by their button.
+    function closeMenus(except) {
+      Array.prototype.forEach.call(drawer.querySelectorAll('.spb-menu'), function (m) {
+        if (m === except) return;
+        m.hidden = true;
+        var b = drawer.querySelector('[data-spb-menu="' + m.dataset.menu + '"]');
+        if (b) b.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    drawer.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('[data-spb-menu]');
+      if (!btn) return;
+      var menu = drawer.querySelector('.spb-menu[data-menu="' + btn.dataset.spbMenu + '"]');
+      if (!menu) return;
+      closeMenus(menu);
+      menu.hidden = !menu.hidden;
+      btn.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+      if (!menu.hidden) {
+        var firstOption = menu.querySelector('.spb-option');
+        if (firstOption) firstOption.focus();
+      }
+    });
+
+    function setBusy(on) {
+      Array.prototype.forEach.call(drawer.querySelectorAll('.spb-action, .spb-option'), function (b) {
+        b.disabled = on;
+      });
+    }
+
+    function runAct(id, act, value, note) {
+      var body = content.querySelector('.spb-panel-body');
+      var url = body && body.dataset.actUrl;
+      var params = new URLSearchParams();
+      params.set('ticket_id', id);
+      params.set('act', act);
+      params.set('value', value);
+      if (note) params.set('note', note);
+      return url ? postForm(url, params) : Promise.resolve({ ok: false, data: {} });
+    }
+
+    function failed(r) {
+      var msg = r && r.data && typeof r.data.message === 'string' && r.data.message
+        ? r.data.message : String(i18n.act_failed || 'Failed.');
+      say(msg, true);
+    }
+
+    drawer.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('[data-spb-act]');
+      if (!btn || btn.disabled) return;
+      e.preventDefault();
+      var id = current;
+      var act = btn.dataset.spbAct;
+      var field = drawer.querySelector('#spb-note-text');
+      var note = field ? field.value.trim() : '';
+      // Closing moves on to the next open card, so a triage run doesn't
+      // need a click per ticket. Decided from the board as it is now.
+      var closing = act === 'status' && btn.dataset.state === 'closed';
+      var then = closing && nextAfterClose ? nextOpenCard(id) : id;
+      closeMenus(null);
+      setBusy(true);
+      runAct(id, act, btn.dataset.value || '', note)
+        .then(function (r) {
+          if (!(r.ok && r.data && r.data.ok)) {
+            failed(r);
+            setBusy(false);
+            return;
+          }
+          if (field) field.value = '';
+          var text = String(i18n.act_done || 'Done.');
+          if (r.data.note === 'saved') text += ' ' + String(i18n.act_note || '');
+          if (r.data.note === 'failed') text += ' ' + String(i18n.note_failed || '');
+          var prev = act === 'status' && !r.data.unchanged && r.data.previous ? r.data.previous : null;
+          say(text, r.data.note === 'failed', prev ? {
+            label: String(i18n.undo || 'Undo'),
+            run: function () { undo(id, prev.id); }
+          } : null);
+          return hooks.reload().catch(function () {}).then(function () {
+            if (then) open(then); else close();
+          });
+        })
+        .catch(function () {
+          failed(null);
+          setBusy(false);
+        });
+    });
+
+    // Undo sets the status the ticket had before, without the note.
+    function undo(id, statusId) {
+      runAct(id, 'status', String(statusId), '')
+        .then(function (r) {
+          if (!(r.ok && r.data && r.data.ok)) {
+            failed(r);
+            return;
+          }
+          say(String(i18n.undone || 'Undone.'), false);
+          return hooks.reload().catch(function () {}).then(function () { open(id); });
+        })
+        .catch(function () { failed(null); });
+    }
 
     drawer.addEventListener('submit', function (e) {
       var form = e.target.closest && e.target.closest('form.spb-note');
