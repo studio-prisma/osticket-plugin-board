@@ -276,6 +276,32 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('sub-tickets under the thread; a subject opens that sub-ticket', async ({ page }) => {
+    const errors = watchErrors(page);
+    await openPanel(page, n.A1);
+    const list = page.locator('.spb-panel-body .spb-subtickets');
+    await expect(list.locator('.spb-subtickets-heading')).toHaveText('Sub-tickets 4');
+    const numbers = await list.locator('.spb-child > a').allTextContents();
+    expect(numbers.sort()).toEqual([n.A2, n.A3, n.A4, n.G2].map((x) => `#${x}`).sort());
+    await expect(list.locator(`.spb-child:has(a:text("#${n.A4}")) .spb-badge`)).toHaveText('Closed');
+    await expect(list.locator(`.spb-child:has(a:text("#${n.A3}")) a`)).toHaveAttribute('href', `/scp/tickets.php?id=${t.A3}`);
+    // The list sits below the thread.
+    const below = await page.evaluate(() => {
+      const thread = document.querySelector('.spb-panel-body #threadPreview');
+      const subs = document.querySelector('.spb-panel-body .spb-subtickets');
+      return !!(thread.compareDocumentPosition(subs) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(below).toBe(true);
+
+    const a3 = list.locator(`.spb-child:has(a:text("#${n.A3}")) .spb-child-open`);
+    await a3.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(LOCAL, 'screens', 'quickview-subtickets.png'), fullPage: false });
+    await a3.click();
+    await expect(page.locator('.spb-panel-body')).toHaveAttribute('data-number', n.A3);
+    await expect(page.locator('.spb-panel-body .spb-subtickets')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test('act endpoint: CSRF, unknown action or value, unknown ticket', async ({ page }) => {
     expect((await post(page, ACT, `ticket_id=${t.A5}&act=claim`, false)).status).toBe(400);
     expect((await post(page, ACT, `ticket_id=${t.A5}&act=delete`)).status).toBe(422);

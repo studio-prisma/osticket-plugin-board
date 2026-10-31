@@ -17,7 +17,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Which tickets | Exactly what the agent's departments, assignments and referrals allow (`Staff::getTicketsVisibility()`, same as the queues) | Own tickets, organisation tickets if the organisation shares them, collaborations if enabled (same three sources as the portal's ticket list) |
 | Filter | Any queue or saved search of the agent panel, picked above the board, remembered per session | No |
 | Change status | Drag and drop, or `Alt+←` / `Alt+→` on a focused card. Closing asks first | No |
-| Quick view | Click or `Enter` on a card: osTicket's ticket preview, summary and recent thread on one page, plus the actions the agent's role allows. Closing a ticket from it moves straight on to the next open card; work-through columns such as a triage status move on within the column (settings) | No |
+| Quick view | Click or `Enter` on a card: osTicket's ticket preview, summary, recent thread and sub-tickets on one page, plus the actions the agent's role allows. Closing a ticket from it moves straight on to the next open card; work-through columns such as a triage status move on within the column (settings) | No |
 | Actions | One click for status, claim, release, mark answered. Pickers in the panel for agent, team, department and priority. Refer and add task open osTicket's dialogs. A status change can be undone from the toast | No |
 | Internal note | From the quick view, as plain text. Text in the note field is saved with whichever action you click next | No |
 | Due and priority | Tags for overdue, due today, due tomorrow, and High/Emergency priority | No |

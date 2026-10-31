@@ -596,6 +596,9 @@ final class BoardController
     /** Upper bound for an internal note from the board, in characters. */
     public const NOTE_MAX = 10000;
 
+    /** Sub-tickets listed in the quick view; more point to the ticket view. */
+    public const SUBTICKET_MAX = 50;
+
     /**
      * HTML fragment for the quick view. Unknown and invisible tickets get
      * the same 404 as on the move endpoint.
@@ -649,6 +652,7 @@ final class BoardController
         ob_start();
         include STAFFINC_DIR . 'templates/ticket-preview.tmpl.php';
         $preview = (string) ob_get_clean();
+        $children = self::childTickets($ticket, $thisstaff, $statuses);
 
         header('Cache-Control: no-store');
         Http::response(200, BoardRenderer::panel(array(
@@ -661,9 +665,51 @@ final class BoardController
             'actions'      => $actions,
             'menus'        => $menus,
             'preview_html' => $preview,
+            'children'     => $children['rows'],
+            'children_more' => $children['more'],
+            'ticket_base'  => ROOT_PATH . 'scp/tickets.php?id=',
             'strings'      => $strings,
         )), 'text/html');
         exit;
+    }
+
+    /**
+     * Sub-tickets of $ticket for the quick view, oldest first. Same rules as
+     * on the board: ticket_pid only, and the agent's own visibility, so a
+     * sub-ticket the agent may not see is not listed.
+     *
+     * @return array{rows: array, more: bool}
+     */
+    private static function childTickets($ticket, Staff $staff, array $statuses): array
+    {
+        if (class_exists('TicketForm')) {
+            TicketForm::ensureDynamicDataView();
+        }
+        $known = array_column($statuses, null, 'id');
+        $q = Ticket::objects()
+            ->filter(array('ticket_pid' => (int) $ticket->getId()))
+            ->filter($staff->getTicketsVisibility())
+            ->distinct('ticket_id')
+            ->order_by('ticket_id')
+            ->limit(self::SUBTICKET_MAX + 1)
+            ->values('ticket_id', 'number', 'status_id', 'status__name', 'status__state',
+                'cdata__subject', 'staff__firstname', 'staff__lastname');
+
+        $rows = array();
+        foreach ($q as $r) {
+            $status = $known[(int) $r['status_id']] ?? array(
+                'name' => (string) $r['status__name'], 'state' => strtolower((string) $r['status__state']));
+            $rows[] = array(
+                'id'           => (int) $r['ticket_id'],
+                'number'       => (string) $r['number'],
+                'subject'      => (string) $r['cdata__subject'],
+                'status_name'  => (string) $status['name'],
+                'status_state' => (string) $status['state'],
+                'assignee'     => trim($r['staff__firstname'] . ' ' . $r['staff__lastname']),
+            );
+        }
+        $more = count($rows) > self::SUBTICKET_MAX;
+        return array('rows' => array_slice($rows, 0, self::SUBTICKET_MAX), 'more' => $more);
     }
 
     /**

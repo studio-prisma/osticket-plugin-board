@@ -448,8 +448,48 @@ final class BoardRenderer
 
         $html .= sprintf('<div class="spb-preview">%s</div>',
             self::threadHeading((string) $p['preview_html'], (string) ($t['panel_thread'] ?? '')));
+        $html .= self::subtickets($p['children'] ?? array(), !empty($p['children_more']),
+            (string) ($p['ticket_base'] ?? ''), $t);
 
         return $html . '</div>';
+    }
+
+    /**
+     * Sub-tickets under the thread. The subject opens the sub-ticket's own
+     * quick view, the number its ticket page. Nothing without sub-tickets.
+     * Public for the unit tests.
+     *
+     * @param array $kids  id, number, subject, status_name, status_state, assignee
+     */
+    public static function subtickets(array $kids, bool $more, string $base, array $t): string
+    {
+        if (!$kids) {
+            return '';
+        }
+        $html = sprintf(
+            '<section class="spb-subtickets"><h3 class="spb-subtickets-heading">%s <span class="spb-count">%d</span></h3><ul>',
+            self::e($t['panel_subtickets']),
+            count($kids)
+        );
+        foreach ($kids as $k) {
+            $html .= sprintf(
+                '<li class="spb-child" data-ticket-id="%1$d"><a href="%2$s">#%3$s</a>'
+                . ' <button type="button" class="spb-child-subject spb-child-open" data-spb-open="%1$d">%4$s</button>'
+                . '%5$s <span class="spb-badge spb-state-%6$s">%7$s</span></li>',
+                (int) $k['id'],
+                self::e($base . rawurlencode((string) $k['id'])),
+                self::e($k['number']),
+                self::e($k['subject']),
+                $k['assignee'] !== '' ? sprintf(' <span class="spb-child-who">%s</span>', self::e($k['assignee'])) : '',
+                self::e($k['status_state']),
+                self::e($k['status_name'])
+            );
+        }
+        $html .= '</ul>';
+        if ($more) {
+            $html .= sprintf('<p class="spb-hint">%s</p>', self::e($t['panel_subtickets_more']));
+        }
+        return $html . '</section>';
     }
 
     /**
