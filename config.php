@@ -36,9 +36,10 @@ class BoardConfig extends PluginConfig
                 'label'         => 'Board as start page',
                 'default'       => true,
                 'configuration' => array(
-                    'desc' => 'After logging in, agents land on the board instead of the '
-                            . 'ticket list. A login from a link, e.g. a ticket in an alert '
-                            . 'mail, still opens that link. The Tickets tab is unchanged.',
+                    'desc' => 'The board replaces the ticket list as the agent panel\'s start '
+                            . 'page: after logging in and when clicking the logo. A login from '
+                            . 'a link, e.g. a ticket in an alert mail, still opens that link. '
+                            . 'The Tickets tab still opens the ticket list.',
                 ),
             )),
 

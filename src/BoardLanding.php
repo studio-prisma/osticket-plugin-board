@@ -3,103 +3,81 @@
 declare(strict_types=1);
 
 /**
- * Board as the agent's start page after login.
+ * Board as the agent panel's start page.
  *
- * scp/login.php fixes the redirect target before the login runs, so the
- * plugin can't change it. Instead it marks the session when a login ends
- * on the default start page (scp/index.php, which shows the ticket list),
- * and the first load of that page afterwards goes to the board. A login
- * that came from a specific link, e.g. a ticket in an alert mail, keeps
- * its target. The mark is used once: the Tickets tab works as before.
+ * scp/index.php is the panel's start page: the logo, the "Agent Panel" link
+ * and a login without a specific target all lead there, and it shows the
+ * ticket list. The Tickets tab links to tickets.php instead, so taking over
+ * index.php leaves the ticket list one click away.
+ *
+ * Who the agent is, whether the session is still valid and whether a
+ * password change or 2FA setup is pending is only known once
+ * scp/staff.inc.php has run, well after plugins bootstrap. So the plugin
+ * buffers the start page and decides at the end of the request: a fully
+ * signed-in agent gets a redirect to the board, anything else (login page,
+ * password change, 2FA, upgrade) gets osTicket's own response unchanged.
+ * The ticket list is rendered once and discarded in that case; scp/index.php
+ * has no hook that runs between the agent check and the page output.
  */
 final class BoardLanding
 {
-    public const KEY = '_spb_landing';
+    /** @var string */
+    private static $target = '';
 
-    /** The mark expires if the agent never reaches the start page. */
-    public const TTL = 600;
-
-    /**
-     * Same rule as scp/login.php: no target, or the login or AJAX script,
-     * means the default page. The panel root and index.php count as default
-     * too: that's where an expired session sends someone who opened /scp/.
-     */
-    public static function isDefaultTarget(?string $dest, string $root): bool
+    /** Whether the request is the agent panel's start page, without parameters. */
+    public static function isStartPage(string $script, string $method, string $query): bool
     {
-        if ($dest === null || $dest === '' || strpos($dest, 'login.php') !== false || strpos($dest, 'ajax.php') !== false) {
-            return true;
-        }
-        $base = rtrim($root, '/') . '/scp/';
-        return in_array($dest, array('index.php', $base, $base . 'index.php'), true);
-    }
-
-    /** Whether the request is the agent panel's start page. */
-    public static function isStartPage(string $script, string $method): bool
-    {
-        return $method === 'GET' && (bool) preg_match('#/scp/index\.php$#', $script);
-    }
-
-    /** Whether another agent panel page is loaded, which uses up the mark. */
-    public static function isOtherPage(string $script): bool
-    {
-        return (bool) preg_match('#/scp/(?!index\.php$|login\.php$|ajax\.php$)[^/]+\.php$#', $script);
-    }
-
-    /** Signal auth.login.succeeded. */
-    public static function onLogin($staff): void
-    {
-        if (!($staff instanceof Staff)) {
-            return;
-        }
-        $dest = $_SESSION['_staff']['auth']['dest'] ?? null;
-        if (self::isDefaultTarget(is_string($dest) ? $dest : null, ROOT_PATH)) {
-            $_SESSION[self::KEY] = time();
-        } else {
-            unset($_SESSION[self::KEY]);
-        }
+        return $method === 'GET' && $query === '' && (bool) preg_match('#/scp/index\.php$#', $script);
     }
 
     /**
-     * Whether the session holds a signed-in agent past the 2FA step. Reads
-     * only the session: plugins bootstrap before osTicket has loaded its
-     * config, so looking up the agent here would fail.
+     * Whether the finished response may be replaced by the redirect: no
+     * redirect of osTicket's own, headers still open.
+     *
+     * @param string[] $headers  headers_list()
      */
-    public static function signedIn(array $session): bool
+    public static function mayRedirect(array $headers, bool $sent, int $code): bool
     {
-        $auth = $session['_auth']['staff'] ?? null;
-        return is_array($auth) && !empty($auth['id']) && !isset($auth['2fa']);
+        if ($sent || $code !== 200) {
+            return false;
+        }
+        foreach ($headers as $h) {
+            if (stripos($h, 'location:') === 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    /**
-     * Called from bootstrap on every request while the mark is set. Sends a
-     * signed-in agent from the start page to the board, once. A forced
-     * password change or 2FA setup is left to the board page, which sends
-     * such an agent back to the start page (BoardController::staffPage);
-     * the mark is gone by then, so that doesn't loop.
-     */
-    public static function maybeRedirect(string $target): void
+    /** Called from bootstrap. */
+    public static function watch(string $target): void
     {
-        $mark = $_SESSION[self::KEY] ?? null;
-        if (!is_int($mark)) {
-            return;
-        }
-        if (time() - $mark > self::TTL) {
-            unset($_SESSION[self::KEY]);
+        if (PHP_SAPI === 'cli') {
             return;
         }
         $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
         $method = (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET');
-        $start = self::isStartPage($script, $method);
-        if (!$start && !self::isOtherPage($script)) {
-            return; // login.php (2FA), ajax.php, the portal: wait
-        }
-        if (!self::signedIn($_SESSION)) {
+        $query = (string) ($_SERVER['QUERY_STRING'] ?? '');
+        if (!self::isStartPage($script, $method, $query)) {
             return;
         }
-        unset($_SESSION[self::KEY]);
-        if ($start) {
-            Http::redirect($target);
-            exit;
+        self::$target = $target;
+        ob_start(array(__CLASS__, 'finish'));
+    }
+
+    /** Output-buffer callback, runs once the start page is complete. */
+    public static function finish($buffer)
+    {
+        $staff = $GLOBALS['thisstaff'] ?? null;
+        if (!($staff instanceof Staff) || !$staff->getId() || !$staff->isValid()
+                || BoardController::staffGated($staff)) {
+            return $buffer;
         }
+        $code = http_response_code();
+        if (!self::mayRedirect(headers_list(), headers_sent(), is_int($code) ? $code : 200)) {
+            return $buffer;
+        }
+        header('Location: ' . self::$target, true, 302);
+        return '';
     }
 }

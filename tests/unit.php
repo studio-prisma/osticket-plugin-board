@@ -363,24 +363,13 @@ check('setting: next ticket after closing on by default, can be switched off', B
     && BoardController::normalise(array('next_after_close' => 0))['next_after_close'] === false);
 check('setting: board as start page on by default, can be switched off', BoardController::normalise(array())['staff_landing'] === true
     && BoardController::normalise(array('staff_landing' => false))['staff_landing'] === false);
-check('landing: login without a target, or from the panel root, lands on the board', BoardLanding::isDefaultTarget(null, '/')
-    && BoardLanding::isDefaultTarget('', '/') && BoardLanding::isDefaultTarget('index.php', '/')
-    && BoardLanding::isDefaultTarget('/scp/', '/') && BoardLanding::isDefaultTarget('/scp/index.php', '/')
-    && BoardLanding::isDefaultTarget('/helpdesk/scp/', '/helpdesk/')
-    && BoardLanding::isDefaultTarget('/scp/login.php', '/') && BoardLanding::isDefaultTarget('/scp/ajax.php/tickets/5', '/'));
-check('landing: a login from a link keeps its target', !BoardLanding::isDefaultTarget('/scp/tickets.php?id=5', '/')
-    && !BoardLanding::isDefaultTarget('/scp/tickets.php', '/') && !BoardLanding::isDefaultTarget('/scp/index.php?a=1', '/')
-    && !BoardLanding::isDefaultTarget('/scp/', '/helpdesk/'));
-check('landing: only a GET of the panel start page redirects', BoardLanding::isStartPage('/scp/index.php', 'GET')
-    && BoardLanding::isStartPage('/helpdesk/scp/index.php', 'GET') && !BoardLanding::isStartPage('/scp/index.php', 'POST')
-    && !BoardLanding::isStartPage('/scp/tickets.php', 'GET') && !BoardLanding::isStartPage('/index.php', 'GET'));
-check('landing: other panel pages use up the mark, login and AJAX wait', BoardLanding::isOtherPage('/scp/tickets.php')
-    && BoardLanding::isOtherPage('/scp/users.php') && !BoardLanding::isOtherPage('/scp/login.php')
-    && !BoardLanding::isOtherPage('/scp/ajax.php') && !BoardLanding::isOtherPage('/scp/index.php')
-    && !BoardLanding::isOtherPage('/tickets.php'));
-check('landing: signed in means an agent id and no pending 2FA', BoardLanding::signedIn(array('_auth' => array('staff' => array('id' => 3, '2fa' => null))))
-    && !BoardLanding::signedIn(array('_auth' => array('staff' => array('id' => 3, '2fa' => 'email:abc:1'))))
-    && !BoardLanding::signedIn(array('_auth' => array('staff' => array('id' => 0)))) && !BoardLanding::signedIn(array()));
+check('landing: only a plain GET of the panel start page is taken over', BoardLanding::isStartPage('/scp/index.php', 'GET', '')
+    && BoardLanding::isStartPage('/helpdesk/scp/index.php', 'GET', '') && !BoardLanding::isStartPage('/scp/index.php', 'POST', '')
+    && !BoardLanding::isStartPage('/scp/index.php', 'GET', 'queue=5') && !BoardLanding::isStartPage('/scp/tickets.php', 'GET', '')
+    && !BoardLanding::isStartPage('/index.php', 'GET', '') && !BoardLanding::isStartPage('/scp/ajax.php', 'GET', ''));
+check('landing: osTicket\'s own redirects and sent headers win', BoardLanding::mayRedirect(array('Content-Type: text/html'), false, 200)
+    && !BoardLanding::mayRedirect(array('Location: login.php'), false, 302) && !BoardLanding::mayRedirect(array('location: x'), false, 200)
+    && !BoardLanding::mayRedirect(array(), true, 200) && !BoardLanding::mayRedirect(array(), false, 403));
 $ids = '/^[1-9]\d{0,9}$/';
 check('next rules: status pickers read as stored by osTicket', BoardController::keyList(array('5' => 'Triage', '7' => 'Open'), $ids) === array('5', '7')
     && BoardController::keyList('{"5":"Triage"}', $ids) === array('5')
