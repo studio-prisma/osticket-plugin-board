@@ -13,7 +13,7 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 
 | | Agenten-Panel | Kundenportal |
 |---|---|---|
-| Wo | Applications → Board (`/scp/ajax.php/board`), und die Startseite nach dem Login (Einstellung) | „Board" in der Portal-Navigation (`/ajax.php/board`) |
+| Wo | Applications → Board (`/scp/ajax.php/board`), und die Startseite des Panels: nach dem Login und über das Logo (Einstellung) | „Board" in der Portal-Navigation (`/ajax.php/board`) |
 | Welche Tickets | Genau das, was Abteilungen, Zuweisungen und Weiterleitungen des Agenten erlauben (`Staff::getTicketsVisibility()`, wie in den Queues) | Eigene Tickets, Tickets der Organisation, wenn die Organisation sie teilt, und Mitwirkungen, wenn aktiviert (dieselben drei Quellen wie die Ticketliste im Portal) |
 | Filter | Jede Queue und gespeicherte Suche des Agenten-Panels, über dem Board auswählbar, pro Sitzung gemerkt | Nein |
 | Status ändern | Drag and Drop, oder `Alt+←` / `Alt+→` auf einer fokussierten Karte. Vor dem Schließen kommt eine Rückfrage | Nein |
@@ -66,7 +66,7 @@ Kurzfassung:
 | Einstellung | Standard | Zweck |
 |---|---|---|
 | Agent board | an | Eintrag unter Applications, Routen unter `/scp/ajax.php/board` |
-| Board as start page | an | Nach dem Login landen Agenten auf dem Board statt in der Ticketliste. Ein Login über einen Link (z. B. ein Ticket aus einer Benachrichtigung) öffnet weiter diesen Link; ein ausstehender Passwortwechsel oder 2FA-Schritt kommt zuerst. Der Tab „Tickets" bleibt unverändert |
+| Board as start page | an | Das Board ersetzt die Ticketliste als Startseite (`scp/index.php`): nach dem Login, über das Logo und über den Link „Agent Panel". Ein Login über einen Link (z. B. ein Ticket aus einer Benachrichtigung) öffnet weiter diesen Link; ein ausstehender Passwortwechsel oder 2FA-Schritt kommt zuerst. Der Tab „Tickets" öffnet weiter die Ticketliste |
 | Client board | **aus** | Board nur zum Lesen im Portal. Aus heißt: die Route antwortet mit 404 |
 | Client navigation link | an | „Board" in der Portal-Navigation. Aus: nur per URL erreichbar |
 | Closed tickets, days | 14 | In der Standardansicht zeigen geschlossene Spalten Tickets, die in diesem Zeitraum geschlossen wurden. `0` blendet sie aus. Ist eine Queue oder Suche gewählt, entscheiden deren Kriterien |

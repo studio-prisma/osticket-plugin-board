@@ -195,15 +195,25 @@ test.describe('board as start page', () => {
     await page.click('#login button[type="submit"]');
   }
 
-  test('login lands on the board once; the ticket list stays reachable', async ({ page }) => {
+  test('login and the logo open the board; the Tickets tab opens the ticket list', async ({ page }) => {
     await page.goto('/scp/login.php');
     await login(page, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
     await page.waitForURL(/\/scp\/ajax\.php\/board/);
     await expect(page.locator('.spb-board')).toHaveCount(1);
 
-    await page.goto('/scp/index.php');
-    await expect(page).toHaveURL(/\/scp\/index\.php$/);
+    await page.goto('/scp/tickets.php');
     await expect(page.locator('.spb-board')).toHaveCount(0);
+    await expect(page.locator('#nav a[href="tickets.php"], #nav a[href$="/tickets.php"]').first()).toBeVisible();
+
+    await Promise.all([page.waitForURL(/\/scp\/ajax\.php\/board/), page.locator('#logo').click()]);
+    await expect(page.locator('.spb-board')).toHaveCount(1);
+
+    await Promise.all([page.waitForURL(/\/scp\/tickets\.php/), page.locator('#nav a', { hasText: 'Tickets' }).first().click()]);
+    await expect(page.locator('.spb-board')).toHaveCount(0);
+
+    // With parameters, index.php stays osTicket's.
+    await page.goto('/scp/index.php?a=1');
+    await expect(page).toHaveURL(/\/scp\/index\.php\?a=1$/);
   });
 
   test('a login from a ticket link opens that ticket', async ({ page }) => {

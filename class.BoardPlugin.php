@@ -11,8 +11,9 @@ declare(strict_types=1);
  *                 "Applications". The ajax.scp signal of scp/ajax.php receives
  *                 /board, /board/move, /board/act, /board/state, /board/panel/{id},
  *                 /board/note and /board/assets/*.
- *   Start page    auth.login.succeeded marks the session; the first load of
- *                 scp/index.php after it goes to the board (BoardLanding).
+ *   Start page    scp/index.php (logo, login without a target) is buffered and
+ *                 answered with a redirect to the board once the agent is
+ *                 known to be fully signed in (BoardLanding).
  *   Client portal The ajax.client signal of ajax.php receives /board and
  *                 /board/assets/*. The navigation entry is placed into the
  *                 finished page by an output buffer (NavInjector), because
@@ -45,7 +46,7 @@ require_once __DIR__ . '/src/BoardLanding.php';
 class BoardPlugin extends Plugin
 {
     /** Mirrors plugin.php; used for cache-busting the asset URLs only. */
-    public const VERSION = '0.3.0';
+    public const VERSION = '0.3.1';
 
     /** Route bases, relative to ROOT_PATH. */
     public const STAFF_BASE = 'scp/ajax.php/board';
@@ -90,10 +91,7 @@ class BoardPlugin extends Plugin
         $s = BoardController::settings();
 
         if ($s['enable_staff'] && $s['staff_landing']) {
-            Signal::connect('auth.login.succeeded', array('BoardLanding', 'onLogin'));
-            if (isset($_SESSION[BoardLanding::KEY])) {
-                BoardLanding::maybeRedirect(ROOT_PATH . self::STAFF_BASE);
-            }
+            BoardLanding::watch(ROOT_PATH . self::STAFF_BASE);
         }
 
         if ($s['enable_staff']) {

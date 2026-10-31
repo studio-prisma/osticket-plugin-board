@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-31
+
+### Changed
+
+- "Board as start page" now covers the whole start page (`scp/index.php`): the logo and the "Agent Panel" link open the board too, not only the login. The decision moved to the end of the request, after osTicket has checked the agent, so an expired session, a pending password change or 2FA setup always get osTicket's own response. The login mark from 0.3.0 is gone.
+
 ## [0.3.0] - 2026-10-31
 
 ### Added
@@ -47,7 +53,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/studio-prisma/osticket-plugin-board/releases/tag/v0.1.0

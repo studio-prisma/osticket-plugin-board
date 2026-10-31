@@ -72,7 +72,7 @@ As the **non-admin** test agent:
 
 | # | Action | Expected |
 |---|---|---|
-| 4.0 | Log out, log in again as an agent | You land on the board. The Tickets tab still opens the ticket list |
+| 4.0 | Log out, log in again as an agent; then click the Tickets tab, then the logo | Login and logo open the board, the Tickets tab opens the ticket list |
 | 4.1 | Agent panel → Applications | Entry "Board" |
 | 4.2 | Open it | Columns for every open status and, unless disabled, closed statuses |
 | 4.3 | Compare with the agent's ticket queue | Same tickets, no ticket from a department the agent can't access |

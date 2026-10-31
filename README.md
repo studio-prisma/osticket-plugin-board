@@ -13,7 +13,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 
 | | Agent panel | Client portal |
 |---|---|---|
-| Where | Applications → Board (`/scp/ajax.php/board`), and the start page after login (setting) | "Board" in the portal navigation (`/ajax.php/board`) |
+| Where | Applications → Board (`/scp/ajax.php/board`), and the panel's start page: after login and on the logo (setting) | "Board" in the portal navigation (`/ajax.php/board`) |
 | Which tickets | Exactly what the agent's departments, assignments and referrals allow (`Staff::getTicketsVisibility()`, same as the queues) | Own tickets, organisation tickets if the organisation shares them, collaborations if enabled (same three sources as the portal's ticket list) |
 | Filter | Any queue or saved search of the agent panel, picked above the board, remembered per session | No |
 | Change status | Drag and drop, or `Alt+←` / `Alt+→` on a focused card. Closing asks first | No |
@@ -66,7 +66,7 @@ Short version:
 | Setting | Default | Purpose |
 |---|---|---|
 | Agent board | on | Entry under Applications, routes under `/scp/ajax.php/board` |
-| Board as start page | on | After logging in, agents land on the board instead of the ticket list. A login from a link (e.g. a ticket in an alert mail) still opens that link; a pending password change or 2FA step comes first. The Tickets tab is unchanged |
+| Board as start page | on | The board replaces the ticket list as the start page (`scp/index.php`): after logging in, on the logo and on the "Agent Panel" link. A login from a link (e.g. a ticket in an alert mail) still opens that link; a pending password change or 2FA step comes first. The Tickets tab still opens the ticket list |
 | Client board | **off** | Read-only board in the portal. Off means the route answers 404 |
 | Client navigation link | on | "Board" in the portal navigation. Off: reachable by URL only |
 | Closed tickets, days | 14 | In the default view, closed columns show tickets closed within this window. `0` hides closed columns. With a queue or search selected, its criteria decide instead |
