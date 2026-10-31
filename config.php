@@ -32,6 +32,16 @@ class BoardConfig extends PluginConfig
                 ),
             )),
 
+            'staff_landing' => new BooleanField(array(
+                'label'         => 'Board as start page',
+                'default'       => true,
+                'configuration' => array(
+                    'desc' => 'After logging in, agents land on the board instead of the '
+                            . 'ticket list. A login from a link, e.g. a ticket in an alert '
+                            . 'mail, still opens that link. The Tickets tab is unchanged.',
+                ),
+            )),
+
             'enable_client' => new BooleanField(array(
                 'label'         => 'Client board',
                 'default'       => false,

@@ -72,6 +72,7 @@ Als **Nicht-Admin**-Testagent:
 
 | # | Aktion | Erwartet |
 |---|---|---|
+| 4.0 | Abmelden, als Agent neu anmelden | Du landest auf dem Board. Der Tab „Tickets" öffnet weiter die Ticketliste |
 | 4.1 | Agenten-Panel → Applications | Eintrag „Board" |
 | 4.2 | Öffnen | Spalten für jeden offenen Status und, sofern nicht abgeschaltet, geschlossene Status |
 | 4.3 | Mit der Ticket-Queue des Agenten vergleichen | Dieselben Tickets, keines aus einer Abteilung ohne Zugriff |

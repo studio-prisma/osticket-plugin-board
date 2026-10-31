@@ -51,6 +51,7 @@ final class BoardController
             // 0 is off; anything else between 15 seconds and 10 minutes.
             'refresh_seconds' => $refresh <= 0 ? 0 : max(15, min(600, $refresh)),
             'next_after_close' => (bool) ($raw['next_after_close'] ?? true),
+            'staff_landing'   => (bool) ($raw['staff_landing'] ?? true),
         );
     }
 
