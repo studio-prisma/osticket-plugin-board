@@ -17,7 +17,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Which tickets | Exactly what the agent's departments, assignments and referrals allow (`Staff::getTicketsVisibility()`, same as the queues) | Own tickets, organisation tickets if the organisation shares them, collaborations if enabled (same three sources as the portal's ticket list) |
 | Filter | Any queue or saved search of the agent panel, picked above the board, remembered per session | No |
 | Change status | Drag and drop, or `Alt+←` / `Alt+→` on a focused card. Closing asks first | No |
-| Quick view | Click or `Enter` on a card: osTicket's ticket preview plus the actions the agent's role allows. Closing a ticket from it moves straight on to the next open card (setting) | No |
+| Quick view | Click or `Enter` on a card: osTicket's ticket preview plus the actions the agent's role allows. Closing a ticket from it moves straight on to the next open card; work-through columns such as a triage status move on within the column (settings) | No |
 | Actions | One click for status, claim, release, mark answered. Pickers in the panel for agent, team, department and priority. Refer and add task open osTicket's dialogs. A status change can be undone from the toast | No |
 | Internal note | From the quick view, as plain text. Text in the note field is saved with whichever action you click next | No |
 | Due and priority | Tags for overdue, due today, due tomorrow, and High/Emergency priority | No |
@@ -72,6 +72,9 @@ Short version:
 | Closed tickets, days | 14 | In the default view, closed columns show tickets closed within this window. `0` hides closed columns. With a queue or search selected, its criteria decide instead |
 | Column limits | empty | Status name and limit, e.g. `In Progress=5; Open=20`. Marked only, nothing is blocked |
 | Next ticket after closing | On | After closing a ticket from the quick view, the panel opens the next open card. Off: it stays on the closed ticket |
+| Next ticket after changing to | none | Open statuses that, picked in the quick view, also move on to the next open card, wherever the ticket came from |
+| Next ticket from these columns | none | Work-through columns, e.g. a triage status. An action on a ticket in one of them opens the next card of the same column; when the column is empty, the quick view closes. Takes precedence over the two settings above |
+| Actions that move on in these columns | status change | Which actions count in those columns: status change, assign/claim/release, transfer, priority, mark answered |
 | Live refresh, seconds | 60 | How often the agent board checks for changes. `0` switches it off; otherwise 15 to 600 |
 | Maximum cards per board | 300 | Tickets loaded per page view, newest activity first (10 to 2000) |
 

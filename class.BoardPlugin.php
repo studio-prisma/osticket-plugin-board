@@ -83,6 +83,9 @@ class BoardPlugin extends Plugin
             'refresh_seconds' => $config->get('refresh_seconds'),
             'next_after_close' => $config->get('next_after_close'),
             'staff_landing'   => $config->get('staff_landing'),
+            'next_to_statuses'   => $config->get('next_to_statuses'),
+            'next_from_statuses' => $config->get('next_from_statuses'),
+            'next_from_actions'  => $config->get('next_from_actions'),
         ));
         $s = BoardController::settings();
 

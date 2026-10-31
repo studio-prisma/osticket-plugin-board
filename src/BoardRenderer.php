@@ -45,13 +45,19 @@ final class BoardRenderer
                     'act_note'      => $t['act_note'],
                     'undo'          => $t['undo'],
                     'undone'        => $t['undone'],
+                    'column_done'   => $t['column_done'],
                     'limit'         => $t['limit'],
                     'limit_over'    => $t['limit_over'],
                 ), JSON_UNESCAPED_UNICODE))
             );
             if (!empty($ctx['panel_url'])) {
-                $attrs .= sprintf(' data-panel-url="%s" data-next-after-close="%d"',
-                    self::e($ctx['panel_url']), !empty($ctx['next_after_close']) ? 1 : 0);
+                $attrs .= sprintf(' data-panel-url="%s" data-next-after-close="%d" data-next="%s"',
+                    self::e($ctx['panel_url']), !empty($ctx['next_after_close']) ? 1 : 0,
+                    self::e((string) json_encode(array(
+                        'to'   => array_values($ctx['next_to'] ?? array()),
+                        'from' => array_values($ctx['next_from'] ?? array()),
+                        'acts' => array_values($ctx['next_from_acts'] ?? array('status')),
+                    ))));
             }
             if (!empty($ctx['refresh_url'])) {
                 $attrs .= sprintf(

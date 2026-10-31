@@ -23,6 +23,10 @@ final class BoardController
         'wip_limits'      => '',
         'refresh_seconds' => 60,
         'next_after_close' => true,
+        'staff_landing'   => true,
+        'next_to'         => array(),
+        'next_from'       => array(),
+        'next_from_acts'  => array('status'),
     );
 
     public static function configure(array $raw): void
@@ -52,7 +56,36 @@ final class BoardController
             'refresh_seconds' => $refresh <= 0 ? 0 : max(15, min(600, $refresh)),
             'next_after_close' => (bool) ($raw['next_after_close'] ?? true),
             'staff_landing'   => (bool) ($raw['staff_landing'] ?? true),
+            'next_to'         => array_map('intval', self::keyList($raw['next_to_statuses'] ?? null, '/^[1-9]\d{0,9}$/')),
+            'next_from'       => array_map('intval', self::keyList($raw['next_from_statuses'] ?? null, '/^[1-9]\d{0,9}$/')),
+            'next_from_acts'  => self::keyList($raw['next_from_actions'] ?? null, '/^(status|assign|transfer|priority|mark)$/') ?: array('status'),
         );
+    }
+
+    /**
+     * Keys of a multi-select setting. osTicket hands them over as
+     * key => label, as stored JSON or, from older forms, comma-separated.
+     * Only keys matching the pattern survive. Public for the unit tests.
+     *
+     * @return string[]
+     */
+    public static function keyList($raw, string $pattern): array
+    {
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : array_fill_keys(array_map('trim', explode(',', $raw)), true);
+        }
+        if (!is_array($raw)) {
+            return array();
+        }
+        $out = array();
+        foreach (array_keys($raw) as $key) {
+            $key = (string) $key;
+            if (preg_match($pattern, $key) && !in_array($key, $out, true)) {
+                $out[] = $key;
+            }
+        }
+        return array_slice($out, 0, 50);
     }
 
     // ------------------------------------------------------------------
@@ -104,6 +137,9 @@ final class BoardController
             'search_url'    => ROOT_PATH . 'scp/tickets.php',
             'panel_url'     => $base . '/panel/',
             'next_after_close' => $s['next_after_close'],
+            'next_to'         => $s['next_to'],
+            'next_from'       => $s['next_from'],
+            'next_from_acts'  => $s['next_from_acts'],
             'sort'          => $view['sort'],
             'group'         => $view['group'],
             'lanes'         => $lanes,

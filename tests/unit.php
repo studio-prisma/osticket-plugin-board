@@ -381,6 +381,22 @@ check('landing: other panel pages use up the mark, login and AJAX wait', BoardLa
 check('landing: signed in means an agent id and no pending 2FA', BoardLanding::signedIn(array('_auth' => array('staff' => array('id' => 3, '2fa' => null))))
     && !BoardLanding::signedIn(array('_auth' => array('staff' => array('id' => 3, '2fa' => 'email:abc:1'))))
     && !BoardLanding::signedIn(array('_auth' => array('staff' => array('id' => 0)))) && !BoardLanding::signedIn(array()));
+$ids = '/^[1-9]\d{0,9}$/';
+check('next rules: status pickers read as stored by osTicket', BoardController::keyList(array('5' => 'Triage', '7' => 'Open'), $ids) === array('5', '7')
+    && BoardController::keyList('{"5":"Triage"}', $ids) === array('5')
+    && BoardController::keyList('5, 7', $ids) === array('5', '7')
+    && BoardController::keyList(null, $ids) === array() && BoardController::keyList('', $ids) === array());
+check('next rules: junk keys dropped', BoardController::keyList(array('0' => 'x', '-1' => 'x', '5 OR 1' => 'x', 'abc' => 'x', '9' => 'ok'), $ids) === array('9'));
+$n = BoardController::normalise(array('next_from_statuses' => array('5' => 'Triage'), 'next_to_statuses' => '{"6":"Waiting"}',
+    'next_from_actions' => array('assign' => 'x', 'delete' => 'x')));
+check('next rules: normalised to ids and known action groups', $n['next_from'] === array(5) && $n['next_to'] === array(6)
+    && $n['next_from_acts'] === array('assign'));
+$n = BoardController::normalise(array());
+check('next rules: default none, status change only', $n['next_from'] === array() && $n['next_to'] === array()
+    && $n['next_from_acts'] === array('status'));
+check('next rules: board carries them for the quick view', strpos(BoardRenderer::render(BoardModel::build($statuses, array()), array_merge($pickerCtx, array(
+    'panel_url' => '/p/', 'next_from' => array(5), 'next_to' => array(6), 'next_from_acts' => array('status', 'assign')))),
+    'data-next="{&quot;to&quot;:[6],&quot;from&quot;:[5],&quot;acts&quot;:[&quot;status&quot;,&quot;assign&quot;]}"') !== false);
 check('clamp: column limits text capped', strlen(BoardController::normalise(array('wip_limits' => str_repeat('a', 900)))['wip_limits']) === 500);
 
 // -------------------------------------------------------- output buffering

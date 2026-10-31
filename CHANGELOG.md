@@ -9,6 +9,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 ### Added
 
 - Board as the agents' start page after login, setting "Board as start page", on by default. A login from a link keeps its target, a pending password change or 2FA step comes first, and the Tickets tab is unchanged.
+- Settings "Next ticket after changing to" (open statuses that move on like closing does) and "Next ticket from these columns" (work-through columns such as triage: the quick view moves to the next card of the same column and closes when it is empty), with "Actions that move on in these columns" to count assign, transfer, priority or mark answered as well as status changes.
 
 ## [0.2.0] - 2026-10-31
 

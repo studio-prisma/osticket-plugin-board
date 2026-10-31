@@ -85,6 +85,7 @@ As the **non-admin** test agent:
 | 4.10 | In the quick view: Assign to agent, pick someone from the list | No dialog; the quick view shows the new assignee, ticket history lists the assignment |
 | 4.12 | Group by organisation, then try to drag a card into another organisation's row | Rows per organisation; the card stays in its own row |
 | 4.13 | Change a ticket's status in a second browser window, leave the board alone | Within the refresh interval the board updates and says "Board updated" |
+| 4.10c | Optional: put a triage status in "Next ticket from these columns", then change the status of a ticket in that column from the quick view | The quick view opens the next card of the same column; on the last card it closes with "Nothing left in …" |
 | 4.10b | In the quick view, write a line in the note field, then click a closed status on a test ticket | No dialog; the ticket is closed, the note is in its thread, the quick view shows the next open card. "Undo" in the toast reopens it |
 | 4.11 | Post an internal note with `<b>test</b>` | Note in the ticket view as literal text, not bold; not visible in the client portal |
 

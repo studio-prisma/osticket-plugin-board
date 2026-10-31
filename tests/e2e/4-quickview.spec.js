@@ -145,6 +145,64 @@ test.describe('admin', () => {
     }
   });
 
+  test.describe('next-ticket rules', () => {
+    function setRule(key, json) {
+      sql(`INSERT INTO ost_config (namespace, \`key\`, value, updated) VALUES ('${NS}', '${key}', '${json}', NOW())`);
+    }
+    test.afterEach(() => {
+      sql(`DELETE FROM ost_config WHERE namespace='${NS}' AND \`key\` IN ('next_from_statuses','next_from_actions','next_to_statuses')`);
+    });
+
+    // First and second card of the Open column.
+    function openPair(page) {
+      return page.evaluate(() => {
+        const cards = [...document.querySelectorAll('.spb-col[data-status-name="Open"] .spb-cards > .spb-card')];
+        return cards.length < 2 ? null : { id: cards[0].dataset.ticketId, number: cards[0].dataset.number, next: cards[1].dataset.number };
+      });
+    }
+
+    test('work-through column: a status change opens the next card of that column', async ({ page }) => {
+      setRule('next_from_statuses', `{"${seed.status.open}":"Open"}`);
+      await page.reload();
+      const pair = await openPair(page);
+      expect(pair).not.toBeNull();
+      await openPanel(page, pair.number);
+      await act(page, page.locator('.spb-action-group[data-group="status"] .spb-action', { hasText: 'In Progress' }), pair.next);
+      const back = await post(page, '/scp/ajax.php/board/move', `ticket_id=${pair.id}&status_id=${seed.status.open}`);
+      expect(back.status).toBe(200);
+    });
+
+    test('work-through column: other actions stay unless selected in the settings', async ({ page }) => {
+      // Mark answered/unanswered: harmless to toggle, nothing later depends on it.
+      async function mark(expectNumber) {
+        const pair = await openPair(page);
+        await openPanel(page, pair.number);
+        const btn = page.locator('.spb-action[data-spb-act="answered"], .spb-action[data-spb-act="unanswered"]');
+        const did = await btn.getAttribute('data-spb-act');
+        await act(page, btn, expectNumber(pair));
+        const undo = await post(page, ACT, `ticket_id=${pair.id}&act=${did === 'answered' ? 'unanswered' : 'answered'}`);
+        expect(undo.status).toBe(200);
+      }
+      setRule('next_from_statuses', `{"${seed.status.open}":"Open"}`);
+      await page.reload();
+      await mark((pair) => pair.number);
+
+      setRule('next_from_actions', '{"mark":"Mark answered or unanswered"}');
+      await page.reload();
+      await mark((pair) => pair.next);
+    });
+
+    test('a status picked in "Next ticket after changing to" moves on across the board', async ({ page }) => {
+      setRule('next_to_statuses', `{"${seed.status.in_progress}":"In Progress"}`);
+      await page.reload();
+      const pair = await closablePair(page);
+      await openPanel(page, pair.number);
+      await act(page, page.locator('.spb-action-group[data-group="status"] .spb-action', { hasText: 'In Progress' }), pair.next);
+      const back = await post(page, '/scp/ajax.php/board/move', `ticket_id=${pair.id}&status_id=${seed.status.open}`);
+      expect(back.status).toBe(200);
+    });
+  });
+
   test('transfer and priority from their pickers; the current value is not offered', async ({ page }) => {
     await openPanel(page, n.A5);
     await page.locator('[data-spb-menu="depts"]').click();
