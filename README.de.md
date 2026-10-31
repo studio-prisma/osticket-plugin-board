@@ -20,6 +20,11 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 | Schnellansicht | Klick oder `Enter` auf eine Karte: die Ticket-Vorschau von osTicket plus die Aktionen, die die Rolle des Agenten erlaubt | Nein |
 | Aktionen | Status mit Kommentar, an Agent oder Team zuweisen, übernehmen, freigeben, an Abteilung übergeben, weiterleiten, als beantwortet markieren, Priorität ändern, Aufgabe anlegen: alles über die Dialoge von osTicket | Nein |
 | Interne Notiz | Aus der Schnellansicht, als Klartext | Nein |
+| Fälligkeit und Priorität | Markierungen für überfällig, heute fällig, morgen fällig sowie Priorität High/Emergency | Nein |
+| Sortierung | Zuletzt geändert, Fälligkeit, Priorität, neueste, Nummer; pro Sitzung gemerkt | Nein |
+| Gruppierung | Zeilen pro Organisation, zuständiger Person (oder Team) oder Abteilung, Spaltenköpfe mit Summen oben | Nein |
+| Spaltenlimits | Optional pro Status; eine Spalte über ihrem Limit wird markiert | Nein |
+| Live-Aktualisierung | Änderungen von anderswo erscheinen von selbst, solange du nichts tust, oder hinter einem Button „Aktualisierungen anzeigen", während du arbeitest | Nein |
 | Pro Karte | Nummer, Betreff, Anfragende Person, Abteilung, Zuweisung, letzte Änderung, Überfällig-Markierung | Nummer, Betreff, Abteilung, letzte Änderung |
 | Unter-Tickets | Eingeklappte Liste unter dem Eltern-Ticket, jeweils mit eigenem Status | Ebenso, beschränkt auf Unter-Tickets, die der Kunde sehen darf |
 
@@ -64,6 +69,8 @@ Kurzfassung:
 | Client board | **aus** | Board nur zum Lesen im Portal. Aus heißt: die Route antwortet mit 404 |
 | Client navigation link | an | „Board" in der Portal-Navigation. Aus: nur per URL erreichbar |
 | Closed tickets, days | 14 | In der Standardansicht zeigen geschlossene Spalten Tickets, die in diesem Zeitraum geschlossen wurden. `0` blendet sie aus. Ist eine Queue oder Suche gewählt, entscheiden deren Kriterien |
+| Column limits | leer | Statusname und Limit, z. B. `In Progress=5; Open=20`. Wird nur markiert, nichts wird blockiert |
+| Live refresh, seconds | 60 | Wie oft das Agenten-Board auf Änderungen prüft. `0` schaltet es ab, sonst 15 bis 600 |
 | Maximum cards per board | 300 | Tickets pro Seitenaufruf, neueste Aktivität zuerst (10 bis 2000) |
 
 Farben und Radien sind CSS-Variablen auf `.spb-wrap`. Überschreiben im eigenen Stylesheet:
@@ -103,6 +110,9 @@ Nicht geprüft: osTicket 1.17, Nginx, MySQL statt MariaDB, andere Portal-Themes 
 - **Keine Antwort an Kunden aus dem Board.** Antworten bleiben in der Ticketansicht (die Schnellansicht verlinkt dorthin). Als überfällig markieren, zusammenführen, verknüpfen und das komplette Bearbeiten-Formular gibt es ebenfalls nicht, sie sind einen Klick entfernt in der Ticketansicht.
 - **Nach einer Dialog-Aktion lädt das Board neu.** Die Schnellansicht öffnet sich wieder für dasselbe Ticket.
 - **Notizen aus dem Board übergehen den Ticket-Lock.** Der Lock von osTicket schützt nur die Formulare der Ticketansicht vor doppeltem Absenden; die Notiz selbst läuft über dasselbe `Ticket::postNote()`.
+- **Zeilen wechseln nicht die Zuständigkeit.** In der gruppierten Ansicht wandert eine Karte nur innerhalb ihrer Zeile zwischen den Status; in die Zeile einer anderen Organisation oder Person fallen lassen bewirkt nichts. Neu zuweisen geht über die Schnellansicht.
+- **Fälligkeits-Markierungen zeigen, was Aufmerksamkeit braucht:** überfällig, heute, morgen. Ein Termin in einigen Tagen (oft nur die Standard-SLA) bekommt keine Markierung; „Sortierung: Fälligkeit" ordnet trotzdem danach.
+- **Die Live-Aktualisierung lädt das ganze Board im Hintergrund neu**, wenn sich etwas geändert hat, und pausiert in Hintergrund-Tabs. Bei vielen Agenten und kurzen Intervallen ist das ein zusätzlicher Seitenaufbau pro Agent und Änderung; 60 Sekunden sind nicht ohne Grund der Standard.
 - **Ziehen ändert nur den Status.** Zuweisung, Priorität und der Rest laufen über die Schnellansicht. Die Reihenfolge der Karten innerhalb einer Spalte wird nicht gespeichert.
 - **Kinder ziehen nicht mit.** Eine Eltern-Karte zu verschieben ändert nur das Eltern-Ticket. Unter-Tickets behalten ihren Status.
 - **Eine Ebene sichtbar.** Tiefere Hierarchien werden unter dem obersten sichtbaren Vorfahren zusammengefasst.

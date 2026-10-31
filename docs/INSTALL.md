@@ -82,6 +82,8 @@ As the **non-admin** test agent:
 | 4.8 | Open `/scp/ajax.php/board?queue=<ID of another agent's private search>` | Notice "not available", full default board, nothing of that search shown |
 | 4.9 | Click a card | Quick view with the ticket preview and only the actions the agent's role allows |
 | 4.10 | In the quick view: Assign to agent, pick someone, confirm | osTicket's assign dialog; board reloads, quick view shows the new assignee, ticket history lists the assignment |
+| 4.12 | Group by organisation, then try to drag a card into another organisation's row | Rows per organisation; the card stays in its own row |
+| 4.13 | Change a ticket's status in a second browser window, leave the board alone | Within the refresh interval the board updates and says "Board updated" |
 | 4.11 | Post an internal note with `<b>test</b>` | Note in the ticket view as literal text, not bold; not visible in the client portal |
 
 Stop if: 4.3 shows a ticket the agent can't open in the normal ticket view. Disable the instance and report it (see SECURITY.md).

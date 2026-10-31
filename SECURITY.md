@@ -31,6 +31,7 @@ Expected response: an acknowledgement within 7 days, an assessment within 30. Th
 - **Internal notes, agent names or other agent-only fields** reaching the client board.
 - **Response bodies that tell an existing-but-invisible ticket apart from a non-existent one** on `/scp/ajax.php/board/move`.
 - **Using a queue or saved search the agent has no access to**, e.g. another agent's private search via `?queue=<id>`, or telling such a search apart from a non-existent ID.
+- **The live-refresh endpoint** (`/scp/ajax.php/board/state`) revealing anything about tickets outside the agent's board, or answering a client session.
 - **Path traversal or arbitrary file reads** through the asset route.
 - **Quick view of a ticket the agent can't open**, or a quick view that tells such a ticket apart from a non-existent ID.
 - **An internal note from the board** on a ticket the agent can't open, without a valid CSRF token, from a client session, or rendered as markup anywhere.

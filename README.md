@@ -20,6 +20,11 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Quick view | Click or `Enter` on a card: osTicket's ticket preview plus the actions the agent's role allows | No |
 | Actions | Status with comment, assign to agent or team, claim, release, transfer, refer, mark answered, change priority, add task: all through osTicket's own dialogs | No |
 | Internal note | From the quick view, as plain text | No |
+| Due and priority | Tags for overdue, due today, due tomorrow, and High/Emergency priority | No |
+| Sort | Last updated, due date, priority, newest, number; remembered per session | No |
+| Group | Rows per organisation, assignee (or team) or department, column heads with totals on top | No |
+| Column limits | Optional per status; a column over its limit is marked | No |
+| Live refresh | Changes made elsewhere appear by themselves while you're idle, or behind a "Show updates" button while you're working | No |
 | Shown per card | Number, subject, requester, department, assignee, last update, overdue flag | Number, subject, department, last update |
 | Sub-tickets | Folded list under the parent, each with its own status | Same, limited to sub-tickets the client may see |
 
@@ -64,6 +69,8 @@ Short version:
 | Client board | **off** | Read-only board in the portal. Off means the route answers 404 |
 | Client navigation link | on | "Board" in the portal navigation. Off: reachable by URL only |
 | Closed tickets, days | 14 | In the default view, closed columns show tickets closed within this window. `0` hides closed columns. With a queue or search selected, its criteria decide instead |
+| Column limits | empty | Status name and limit, e.g. `In Progress=5; Open=20`. Marked only, nothing is blocked |
+| Live refresh, seconds | 60 | How often the agent board checks for changes. `0` switches it off; otherwise 15 to 600 |
 | Maximum cards per board | 300 | Tickets loaded per page view, newest activity first (10 to 2000) |
 
 Colours and radii are CSS custom properties on `.spb-wrap`. Override them from your own stylesheet:
@@ -103,6 +110,9 @@ Not verified: osTicket 1.17, Nginx, MySQL instead of MariaDB, other portal theme
 - **No reply to the customer from the board.** Replies stay in the ticket view (the quick view links to it). Mark as overdue, merge, link and the full edit form aren't offered either; they're one click away in the ticket view.
 - **The board reloads after a dialog action.** The quick view reopens for the same ticket.
 - **Notes from the board skip the ticket lock.** osTicket's lock only guards the ticket view's own forms against double posting; the note itself goes through the same `Ticket::postNote()`.
+- **Rows don't change ownership.** In a grouped view a card moves between statuses within its row; dropping it into another organisation's or agent's row does nothing. Reassign through the quick view.
+- **Due tags are for what needs attention:** overdue, today, tomorrow. A due date days away (often just the default SLA) gets no tag; "Sort: Due date" still orders by it.
+- **Live refresh reloads the whole board** in the background when something changed, and it pauses in background tabs. With many agents and short intervals that's one extra page render per agent per change; 60 seconds is the default for a reason.
 - **Dragging changes the status only.** Assignment, priority and the rest go through the quick view. The order of cards within a column isn't stored.
 - **Children don't follow.** Moving a parent card changes the parent only. Sub-tickets keep their status.
 - **One level shown.** Deeper hierarchies are flattened under the top-most visible ancestor.

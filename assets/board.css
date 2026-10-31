@@ -603,6 +603,161 @@
   cursor: default;
 }
 
+/* Due and priority -------------------------------------------------------- */
+
+.spb-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 6px;
+}
+
+.spb-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--spb-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.spb-due-overdue {
+  background: color-mix(in srgb, var(--spb-overdue) 12%, transparent);
+  color: var(--spb-overdue);
+}
+
+.spb-due-today,
+.spb-due-tomorrow {
+  background: color-mix(in srgb, #c93400 12%, transparent);
+  color: #a52a00;
+}
+
+.spb-prio::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c93400;
+}
+
+.spb-urgency-1::before {
+  background: var(--spb-overdue);
+}
+
+/* Column limits ---------------------------------------------------------- */
+
+.spb-over .spb-count {
+  background: color-mix(in srgb, var(--spb-overdue) 14%, transparent);
+  color: var(--spb-overdue);
+  font-weight: 700;
+}
+
+.spb-col:has(> .spb-over) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--spb-overdue) 35%, transparent);
+}
+
+/* Swimlanes ---------------------------------------------------------------- */
+
+/* One grid template for the head row and every lane, so columns line up. */
+.spb-grouped {
+  display: block;
+}
+
+.spb-grouped .spb-head-row,
+.spb-grouped .spb-lane-cells {
+  display: grid;
+  grid-template-columns: repeat(var(--spb-cols), minmax(var(--spb-col-min), 1fr));
+  gap: 12px;
+  min-width: calc(var(--spb-cols) * var(--spb-col-min) + (var(--spb-cols) - 1) * 12px);
+}
+
+.spb-grouped .spb-head-row {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 4px;
+  background: color-mix(in srgb, var(--spb-card-bg) 85%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.spb-col-total .spb-col-head {
+  padding: 8px 12px;
+}
+
+.spb-col-total.spb-state-closed .spb-col-head::before {
+  background: var(--spb-closed);
+}
+
+.spb-lane {
+  margin: 0 0 14px;
+}
+
+.spb-lane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 4px 6px;
+  border-top: 0.5px solid var(--spb-border);
+}
+
+.spb-lane-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.spb-lane-head .spb-count {
+  background: none;
+  padding: 0;
+}
+
+.spb-grouped .spb-cell {
+  max-width: none;
+  min-height: 64px;
+}
+
+.spb-grouped .spb-cell .spb-cards {
+  padding: 8px;
+}
+
+.spb-lane-empty {
+  padding: 16px 4px;
+}
+
+/* Live refresh ------------------------------------------------------------- */
+
+.spb-updates {
+  position: fixed;
+  left: 50%;
+  top: 16px;
+  z-index: 7;
+  transform: translateX(-50%);
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--spb-accent);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.spb-updates[hidden] {
+  display: none;
+}
+
+.spb-updates:active {
+  transform: translateX(-50%) scale(0.97);
+}
+
 /* Small screens ---------------------------------------------------------- */
 
 @media (max-width: 760px) {

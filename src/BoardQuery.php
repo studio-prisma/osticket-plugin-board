@@ -218,7 +218,14 @@ final class BoardQuery
         $fields = array('ticket_id', 'number', 'ticket_pid', 'status_id', 'lastupdate',
             'isoverdue', 'cdata__subject', 'dept__name');
         if ($withStaffFields) {
-            $fields = array_merge($fields, array('user__name', 'staff__firstname', 'staff__lastname'));
+            // Due dates, priority, organisation and team are agent-only: the
+            // client portal doesn't show them either.
+            $fields = array_merge($fields, array('user__name', 'staff__firstname', 'staff__lastname',
+                'created', 'duedate', 'est_duedate', 'team__name', 'user__org__name',
+                'cdata__:priority__priority_desc', 'cdata__:priority__priority_urgency'));
+            if (class_exists('TicketForm')) {
+                TicketForm::ensureDynamicDataView();
+            }
         }
 
         $q = $q->distinct('ticket_id')
@@ -243,10 +250,32 @@ final class BoardQuery
                     : '',
                 'overdue'   => (bool) $r['isoverdue'],
             );
+            if ($withStaffFields) {
+                $last = count($rows) - 1;
+                $rows[$last] += array(
+                    'created_raw' => (string) $r['created'],
+                    // A manual due date wins over the SLA one, as in the
+                    // ticket view.
+                    'due_raw'     => (string) ($r['duedate'] ?: $r['est_duedate']),
+                    'due'         => self::date($r['duedate'] ?: $r['est_duedate']),
+                    'priority'    => (string) $r['cdata__:priority__priority_desc'],
+                    'urgency'     => (int) $r['cdata__:priority__priority_urgency'],
+                    'org'         => (string) $r['user__org__name'],
+                    'team'        => (string) $r['team__name'],
+                );
+            }
         }
 
         $truncated = count($rows) > $limit;
         return array('rows' => array_slice($rows, 0, $limit), 'truncated' => $truncated);
+    }
+
+    /** The database clock, so due dates compare in the same time zone they're stored in. */
+    public static function dbNow(): string
+    {
+        $res = db_query('SELECT NOW()');
+        $row = $res ? db_fetch_row($res) : null;
+        return $row ? (string) $row[0] : date('Y-m-d H:i:s');
     }
 
     private static function date($value): string

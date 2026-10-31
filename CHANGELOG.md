@@ -16,6 +16,11 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Sub-tickets from `ticket_pid`, folded under their top-most visible parent, each with its own status.
 - Portal navigation entry via output buffer, without core patches.
 - Settings: agent board, client board, navigation link, closed-ticket window, card limit.
+- Due and priority tags on agent cards (overdue, today, tomorrow; High and Emergency).
+- Sort within columns by last update, due date, priority, newest or number.
+- Swimlanes by organisation, assignee or department, with shared column totals.
+- Optional column limits per status, marked when exceeded.
+- Live refresh: the agent board picks up changes made elsewhere, quietly when idle, behind a button when busy.
 - Colours and radii as CSS custom properties for themes.
 - Visual design: hierarchy from type, not coloured borders; one status dot per column; quick view as a translucent panel that slides in and out on the same path; toast and an on-card confirmation after a move; press feedback; `prefers-reduced-motion`, `prefers-reduced-transparency` and `prefers-contrast` variants.
 - English and German UI strings.

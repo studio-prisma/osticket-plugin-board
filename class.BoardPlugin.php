@@ -9,8 +9,8 @@ declare(strict_types=1);
  *
  *   Agent panel   Application::registerStaffApp() adds the entry under
  *                 "Applications". The ajax.scp signal of scp/ajax.php receives
- *                 /board, /board/move, /board/panel/{id}, /board/note and
- *                 /board/assets/*.
+ *                 /board, /board/move, /board/state, /board/panel/{id},
+ *                 /board/note and /board/assets/*.
  *   Client portal The ajax.client signal of ajax.php receives /board and
  *                 /board/assets/*. The navigation entry is placed into the
  *                 finished page by an output buffer (NavInjector), because
@@ -71,11 +71,13 @@ class BoardPlugin extends Plugin
             return;
         }
         BoardController::configure(array(
-            'enable_staff'  => $config->get('enable_staff'),
-            'enable_client' => $config->get('enable_client'),
-            'client_nav'    => $config->get('client_nav'),
-            'closed_days'   => $config->get('closed_days'),
-            'max_cards'     => $config->get('max_cards'),
+            'enable_staff'    => $config->get('enable_staff'),
+            'enable_client'   => $config->get('enable_client'),
+            'client_nav'      => $config->get('client_nav'),
+            'closed_days'     => $config->get('closed_days'),
+            'max_cards'       => $config->get('max_cards'),
+            'wip_limits'      => $config->get('wip_limits'),
+            'refresh_seconds' => $config->get('refresh_seconds'),
         ));
         $s = BoardController::settings();
 
@@ -112,6 +114,9 @@ class BoardPlugin extends Plugin
         }));
         $dispatcher->append(url_post('^/board/move$', static function () {
             return BoardController::staffMove();
+        }));
+        $dispatcher->append(url_get('^/board/state$', static function () {
+            return BoardController::staffState();
         }));
         $dispatcher->append(url_get('^/board/panel/(\d+)$', static function ($tid) {
             return BoardController::staffPanel($tid);

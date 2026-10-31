@@ -18,9 +18,10 @@ final class BoardModel
      * @param array<int, array{id:int|string, name:string, state:string, sort?:int|string}> $statuses
      * @param array<int, array<string, mixed>> $rows  keys: id, number, pid, status_id,
      *        subject, updated, dept, assignee, user, overdue
+     * @param string $sort  one of self::SORTS; unknown values sort by update
      * @return array{columns: array<int, array{status: array, cards: array}>, count: int}
      */
-    public static function build(array $statuses, array $rows): array
+    public static function build(array $statuses, array $rows, string $sort = 'updated'): array
     {
         $columns = array();
         foreach (self::sortStatuses($statuses) as $s) {
@@ -73,14 +74,180 @@ final class BoardModel
             $columns[$r['status_id']]['cards'][] = $r;
         }
 
+        $cmp = self::comparator($sort);
         foreach ($columns as &$col) {
-            usort($col['cards'], static function ($a, $b) {
-                return strcmp($b['updated_raw'], $a['updated_raw']) ?: strcmp($a['number'], $b['number']);
-            });
+            usort($col['cards'], $cmp);
         }
         unset($col);
 
         return array('columns' => array_values($columns), 'count' => count($byId));
+    }
+
+    /** Sort modes for cards within a column. The first is the default. */
+    public const SORTS = array('updated', 'due', 'priority', 'created', 'number');
+
+    /** Swimlane modes. '' means no lanes. */
+    public const GROUPS = array('', 'org', 'agent', 'dept');
+
+    private static function comparator(string $sort): callable
+    {
+        $updated = static function ($a, $b) {
+            return strcmp($b['updated_raw'], $a['updated_raw']) ?: strcmp($a['number'], $b['number']);
+        };
+        // Empty values sort after everything else in ascending orders.
+        $asc = static function (string $x, string $y): int {
+            if ($x === $y) {
+                return 0;
+            }
+            if ($x === '') {
+                return 1;
+            }
+            if ($y === '') {
+                return -1;
+            }
+            return strcmp($x, $y);
+        };
+        switch ($sort) {
+            case 'due':
+                return static function ($a, $b) use ($asc, $updated) {
+                    return $asc($a['due_raw'], $b['due_raw']) ?: $updated($a, $b);
+                };
+            case 'priority':
+                // Urgency 1 is the most urgent; 0 means unknown and goes last.
+                return static function ($a, $b) use ($asc, $updated) {
+                    $ua = $a['urgency'] ?: PHP_INT_MAX;
+                    $ub = $b['urgency'] ?: PHP_INT_MAX;
+                    return ($ua <=> $ub) ?: $asc($a['due_raw'], $b['due_raw']) ?: $updated($a, $b);
+                };
+            case 'created':
+                return static function ($a, $b) use ($updated) {
+                    return strcmp($b['created_raw'], $a['created_raw']) ?: $updated($a, $b);
+                };
+            case 'number':
+                return static function ($a, $b) {
+                    return strnatcmp($a['number'], $b['number']);
+                };
+            default:
+                return $updated;
+        }
+    }
+
+    /**
+     * Splits a built board into swimlanes: one row per organisation, agent
+     * (or team, if no agent) or department, each with every column. Lanes
+     * are sorted by name; the lane without a value comes last.
+     *
+     * @return array<int, array{key:string, label:string, count:int, columns:array}>
+     */
+    public static function lanes(array $board, string $by, string $emptyLabel): array
+    {
+        $key = static function (array $card) use ($by): string {
+            switch ($by) {
+                case 'org':
+                    return $card['org'];
+                case 'agent':
+                    return $card['assignee'] !== '' ? $card['assignee'] : $card['team'];
+                case 'dept':
+                    return $card['dept'];
+            }
+            return '';
+        };
+
+        $lanes = array();
+        foreach ($board['columns'] as $ci => $col) {
+            foreach ($col['cards'] as $card) {
+                $k = $key($card);
+                if (!isset($lanes[$k])) {
+                    $lanes[$k] = array(
+                        'key'     => $k,
+                        'label'   => $k !== '' ? $k : $emptyLabel,
+                        'count'   => 0,
+                        'columns' => array_map(static function ($c) {
+                            return array('status' => $c['status'], 'cards' => array());
+                        }, $board['columns']),
+                    );
+                }
+                $lanes[$k]['columns'][$ci]['cards'][] = $card;
+                $lanes[$k]['count']++;
+            }
+        }
+
+        uasort($lanes, static function ($a, $b) {
+            if (($a['key'] === '') !== ($b['key'] === '')) {
+                return $a['key'] === '' ? 1 : -1;
+            }
+            return strcasecmp($a['key'], $b['key']);
+        });
+        return array_values($lanes);
+    }
+
+    /**
+     * How a due date reads relative to now, by calendar day. Null when there
+     * is no due date. Both values are database timestamps in the same zone.
+     *
+     * @return array{kind:string, days:int}|null  kind: overdue, today,
+     *         tomorrow, soon (2-7 days), later
+     */
+    public static function dueState(string $dueRaw, string $nowRaw, bool $overdue): ?array
+    {
+        if ($dueRaw === '' || ($due = strtotime(substr($dueRaw, 0, 10))) === false
+            || ($now = strtotime(substr($nowRaw, 0, 10))) === false) {
+            return $overdue ? array('kind' => 'overdue', 'days' => 0) : null;
+        }
+        $days = (int) round(($due - $now) / 86400);
+        if ($overdue || $days < 0 || ($days === 0 && $dueRaw < $nowRaw)) {
+            return array('kind' => 'overdue', 'days' => $days);
+        }
+        if ($days === 0) {
+            return array('kind' => 'today', 'days' => 0);
+        }
+        if ($days === 1) {
+            return array('kind' => 'tomorrow', 'days' => 1);
+        }
+        return array('kind' => $days <= 7 ? 'soon' : 'later', 'days' => $days);
+    }
+
+    /**
+     * Fingerprint of what a board shows, for the live refresh. Changes when
+     * a ticket appears, disappears, moves, gets reassigned, re-prioritised,
+     * re-dated or re-parented; not on fields the board doesn't show.
+     */
+    public static function signature(array $rows): string
+    {
+        $parts = array();
+        foreach ($rows as $r) {
+            $r = self::normalise($r);
+            $parts[$r['id']] = array($r['status_id'], $r['pid'], $r['updated_raw'], $r['assignee'], $r['team'],
+                $r['due_raw'], $r['urgency'], $r['dept'], $r['org'], $r['subject'], $r['overdue']);
+        }
+        ksort($parts);
+        return sha1((string) json_encode($parts));
+    }
+
+    /**
+     * Column limits from the plugin setting, e.g. "In Progress=5; Open=20".
+     * Matched by status name, case-insensitive; separators ; , or newline,
+     * = or :. Anything unreadable is skipped.
+     *
+     * @return array<int, int>  status id => limit
+     */
+    public static function parseLimits(string $raw, array $statuses): array
+    {
+        $byName = array();
+        foreach ($statuses as $s) {
+            $byName[strtolower(trim((string) $s['name']))] = (int) $s['id'];
+        }
+        $out = array();
+        foreach (preg_split('/[;,\n]+/', $raw) ?: array() as $part) {
+            if (!preg_match('/^\s*(.+?)\s*[=:]\s*(\d{1,4})\s*$/', $part, $m)) {
+                continue;
+            }
+            $name = strtolower($m[1]);
+            if (isset($byName[$name]) && (int) $m[2] > 0) {
+                $out[$byName[$name]] = (int) $m[2];
+            }
+        }
+        return $out;
     }
 
     /**
@@ -138,6 +305,14 @@ final class BoardModel
             'assignee'  => (string) ($r['assignee'] ?? ''),
             'user'      => (string) ($r['user'] ?? ''),
             'overdue'   => !empty($r['overdue']),
+            // Agent-only fields; empty on the client board.
+            'created_raw' => (string) ($r['created_raw'] ?? ''),
+            'due_raw'   => (string) ($r['due_raw'] ?? ''),
+            'due'       => (string) ($r['due'] ?? ''),
+            'priority'  => (string) ($r['priority'] ?? ''),
+            'urgency'   => (int) ($r['urgency'] ?? 0),
+            'org'       => (string) ($r['org'] ?? ''),
+            'team'      => (string) ($r['team'] ?? ''),
         );
     }
 }

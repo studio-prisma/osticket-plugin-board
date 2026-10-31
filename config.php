@@ -64,6 +64,23 @@ class BoardConfig extends PluginConfig
                 'configuration' => array('size' => 6, 'length' => 4, 'validator' => 'number'),
             )),
 
+            'wip_limits' => new TextboxField(array(
+                'label'         => 'Column limits',
+                'default'       => '',
+                'hint'          => 'Optional. Status name and limit, e.g. "In Progress=5; Open=20". '
+                                 . 'A column over its limit is marked on the agent board; nothing '
+                                 . 'is blocked.',
+                'configuration' => array('size' => 60, 'length' => 500),
+            )),
+
+            'refresh_seconds' => new TextboxField(array(
+                'label'         => 'Live refresh, seconds',
+                'default'       => '60',
+                'hint'          => 'How often the agent board checks for changes made elsewhere. '
+                                 . '0 switches it off. Between 15 and 600.',
+                'configuration' => array('size' => 6, 'length' => 4, 'validator' => 'number'),
+            )),
+
             'max_cards' => new TextboxField(array(
                 'label'         => 'Maximum cards per board',
                 'default'       => '300',

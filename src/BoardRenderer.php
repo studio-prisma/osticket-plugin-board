@@ -17,7 +17,10 @@ final class BoardRenderer
      *                      appended), move_url (staff only), strings (BoardI18n),
      *                      closed_days, max_cards, truncated; staff only:
      *                      queues (BoardQuery::queueOptions), queue_id,
-     *                      queue_missing, queue_action, search_url
+     *                      queue_missing, queue_action, search_url, panel_url,
+     *                      sort, group, lanes (BoardModel::lanes or null),
+     *                      limits (status id => limit), now (DB time),
+     *                      refresh_url, refresh_seconds, signature
      */
     public static function render(array $board, array $ctx): string
     {
@@ -36,12 +39,24 @@ final class BoardRenderer
                     'panel_failed'  => $t['panel_failed'],
                     'note_saved'    => $t['note_saved'],
                     'note_failed'   => $t['note_failed'],
+                    'refreshed'     => $t['refreshed'],
+                    'limit'         => $t['limit'],
+                    'limit_over'    => $t['limit_over'],
                 ), JSON_UNESCAPED_UNICODE))
             );
             if (!empty($ctx['panel_url'])) {
                 $attrs .= sprintf(' data-panel-url="%s"', self::e($ctx['panel_url']));
             }
+            if (!empty($ctx['refresh_url'])) {
+                $attrs .= sprintf(
+                    ' data-refresh-url="%s" data-refresh-seconds="%d" data-signature="%s"',
+                    self::e($ctx['refresh_url']),
+                    (int) $ctx['refresh_seconds'],
+                    self::e((string) ($ctx['signature'] ?? ''))
+                );
+            }
         }
+        $lanes = $staff && isset($ctx['lanes']) && is_array($ctx['lanes']) ? $ctx['lanes'] : null;
 
         $out = array();
         $out[] = '<div class="spb-wrap">';
@@ -57,13 +72,19 @@ final class BoardRenderer
             $out[] = sprintf('<p class="spb-hint spb-warn">%s</p>', self::e(sprintf($t['truncated'], (int) $ctx['max_cards'])));
         }
         $out[] = '<p class="spb-status" role="status" aria-live="polite"></p>';
-        $out[] = sprintf('<div class="spb-board"%s>', $attrs);
-
-        foreach ($board['columns'] as $col) {
-            $out[] = self::column($col, $ctx, $staff);
+        if ($staff && !empty($ctx['refresh_url'])) {
+            $out[] = sprintf('<button type="button" class="spb-updates" hidden>%s</button>', self::e($t['updates']));
         }
 
-        $out[] = '</div>';
+        if ($lanes === null) {
+            $out[] = sprintf('<div class="spb-board"%s>', $attrs);
+            foreach ($board['columns'] as $col) {
+                $out[] = self::column($col, $ctx, $staff);
+            }
+            $out[] = '</div>';
+        } else {
+            $out[] = self::laneBoard($board, $lanes, $ctx, $attrs);
+        }
         if ($staff && !empty($ctx['panel_url'])) {
             // Empty shell; board.js fills it with BoardController::staffPanel().
             $out[] = sprintf(
@@ -111,6 +132,26 @@ final class BoardRenderer
             $html .= sprintf('<optgroup label="%s">%s</optgroup>', self::e($t['search_group']), implode('', $groups['search']));
         }
         $html .= '</select> ';
+
+        if (isset($ctx['sort'])) {
+            $html .= sprintf('<label for="spb-sort">%s</label> ', self::e($t['sort_label']));
+            $html .= '<select id="spb-sort" name="sort" data-spb-autosubmit>';
+            foreach (BoardModel::SORTS as $sort) {
+                $html .= sprintf('<option value="%s"%s>%s</option>', self::e($sort),
+                    $sort === $ctx['sort'] ? ' selected' : '', self::e($t['sort_' . $sort]));
+            }
+            $html .= '</select> ';
+        }
+        if (isset($ctx['group'])) {
+            $html .= sprintf('<label for="spb-group">%s</label> ', self::e($t['group_label']));
+            $html .= '<select id="spb-group" name="group" data-spb-autosubmit>';
+            foreach (BoardModel::GROUPS as $group) {
+                $html .= sprintf('<option value="%s"%s>%s</option>', self::e($group),
+                    $group === $ctx['group'] ? ' selected' : '', self::e($t['group_' . $group]));
+            }
+            $html .= '</select> ';
+        }
+
         $html .= sprintf('<button type="submit" class="spb-show">%s</button>', self::e($t['queue_show']));
         if (!empty($ctx['search_url'])) {
             $html .= sprintf(' <a class="spb-manage" href="%s">%s</a>', self::e($ctx['search_url']), self::e($t['queue_manage']));
@@ -120,6 +161,23 @@ final class BoardRenderer
             $html .= sprintf('<p class="spb-hint spb-warn">%s</p>', self::e($t['queue_missing']));
         }
         return $html;
+    }
+
+    /** Column head: status dot, name, count, and "n of limit" when limited. */
+    private static function columnHead(array $status, int $count, array $ctx, string $tag): string
+    {
+        $t = $ctx['strings'];
+        $limit = (int) ($ctx['limits'][(int) $status['id']] ?? 0);
+        $over = $limit > 0 && $count > $limit;
+        return sprintf(
+            '<%1$s class="spb-col-head%2$s"><h3>%3$s</h3><span class="spb-count"%4$s%5$s>%6$s</span></%1$s>',
+            $tag,
+            $over ? ' spb-over' : '',
+            self::e($status['name']),
+            $limit > 0 ? sprintf(' data-limit="%d"', $limit) : '',
+            $over ? sprintf(' title="%s"', self::e(sprintf($t['limit_over'], $limit))) : '',
+            self::e($limit > 0 ? sprintf($t['limit'], $count, $limit) : (string) $count)
+        );
     }
 
     private static function column(array $col, array $ctx, bool $staff): string
@@ -133,33 +191,84 @@ final class BoardRenderer
             self::e($s['name']),
             self::e($s['state'])
         );
-        $html .= sprintf(
-            '<header class="spb-col-head"><h3>%s</h3><span class="spb-count">%d</span></header>',
-            self::e($s['name']),
-            count($col['cards'])
-        );
+        $html .= self::columnHead($s, count($col['cards']), $staff ? $ctx : array_merge($ctx, array('limits' => array())), 'header');
         if ($s['state'] === 'closed' && !empty($ctx['closed_days'])) {
             $html .= sprintf('<p class="spb-col-note">%s</p>', self::e(sprintf($t['closed_hint'], (int) $ctx['closed_days'])));
         }
-        $html .= '<ol class="spb-cards">';
-        if (!$col['cards']) {
-            $html .= sprintf('<li class="spb-empty">%s</li>', self::e($t['empty']));
-        }
-        foreach ($col['cards'] as $card) {
-            $html .= self::card($card, $ctx, $staff);
-        }
-        $html .= '</ol></section>';
+        $html .= self::cards($col, $ctx, $staff);
+        $html .= '</section>';
         return $html;
     }
 
-    private static function card(array $c, array $ctx, bool $staff): string
+    private static function cards(array $col, array $ctx, bool $staff): string
+    {
+        $html = '<ol class="spb-cards">';
+        if (!$col['cards']) {
+            $html .= sprintf('<li class="spb-empty">%s</li>', self::e($ctx['strings']['empty']));
+        }
+        foreach ($col['cards'] as $card) {
+            $html .= self::card($card, $ctx, $staff, $col['status']['state']);
+        }
+        return $html . '</ol>';
+    }
+
+    /**
+     * Swimlanes: one shared row of column heads (with totals and limits),
+     * then one row per lane. Each lane cell is a .spb-col of its own, so
+     * drag and drop and the keyboard move work per lane.
+     */
+    private static function laneBoard(array $board, array $lanes, array $ctx, string $attrs): string
+    {
+        $t = $ctx['strings'];
+        $html = sprintf(
+            '<div class="spb-board spb-grouped" style="--spb-cols: %d"%s>',
+            count($board['columns']),
+            $attrs
+        );
+
+        $html .= '<div class="spb-head-row">';
+        foreach ($board['columns'] as $col) {
+            $html .= sprintf('<div class="spb-col-total spb-state-%s" data-status-id="%d">',
+                self::e($col['status']['state']), (int) $col['status']['id']);
+            $html .= self::columnHead($col['status'], count($col['cards']), $ctx, 'div');
+            $html .= '</div>';
+        }
+        $html .= '</div>';
+
+        if (!$lanes) {
+            $html .= sprintf('<p class="spb-empty spb-lane-empty">%s</p>', self::e($t['empty']));
+        }
+        foreach ($lanes as $lane) {
+            $html .= sprintf(
+                '<section class="spb-lane" data-lane="%s"><header class="spb-lane-head"><h3>%s</h3><span class="spb-count">%d</span></header><div class="spb-lane-cells">',
+                self::e($lane['key']),
+                self::e($lane['label']),
+                (int) $lane['count']
+            );
+            foreach ($lane['columns'] as $col) {
+                $s = $col['status'];
+                $html .= sprintf(
+                    '<div class="spb-col spb-cell spb-state-%s" data-status-id="%d" data-status-name="%s" data-state="%s">',
+                    self::e($s['state']),
+                    (int) $s['id'],
+                    self::e($s['name']),
+                    self::e($s['state'])
+                );
+                $html .= self::cards($col, $ctx, true) . '</div>';
+            }
+            $html .= '</div></section>';
+        }
+
+        return $html . '</div>';
+    }
+
+    private static function card(array $c, array $ctx, bool $staff, string $state = 'open'): string
     {
         $t = $ctx['strings'];
         $url = $ctx['ticket_url'] . rawurlencode((string) $c['id']);
 
         $html = sprintf(
-            '<li class="spb-card%s" data-ticket-id="%d" data-number="%s"%s>',
-            $c['overdue'] ? ' spb-overdue' : '',
+            '<li class="spb-card" data-ticket-id="%d" data-number="%s"%s>',
             (int) $c['id'],
             self::e($c['number']),
             $staff ? ' draggable="true" tabindex="0"' : ''
@@ -169,10 +278,30 @@ final class BoardRenderer
             self::e($url),
             self::e($c['number'])
         );
-        if ($c['overdue']) {
-            $html .= sprintf(' <span class="spb-flag">%s</span>', self::e($t['overdue']));
-        }
         $html .= sprintf('<div class="spb-subject">%s</div>', self::e($c['subject']));
+
+        // Due and priority: agent board only, open tickets only. The portal
+        // shows neither to customers.
+        if ($staff && $state === 'open') {
+            $tags = '';
+            if ($c['urgency'] > 0 && $c['urgency'] <= 2 && $c['priority'] !== '') {
+                $tags .= sprintf('<span class="spb-tag spb-prio spb-urgency-%d">%s</span>',
+                    (int) $c['urgency'], self::e($c['priority']));
+            }
+            // Only what needs attention gets a tag. A due date days away is
+            // on nearly every ticket (the default SLA) and would be noise;
+            // "Sort: Due date" still orders by it.
+            $due = BoardModel::dueState($c['due_raw'], (string) ($ctx['now'] ?? ''), $c['overdue']);
+            if ($due !== null && in_array($due['kind'], array('overdue', 'today', 'tomorrow'), true)) {
+                $tags .= sprintf('<span class="spb-tag spb-due spb-due-%s"%s>%s</span>',
+                    self::e($due['kind']),
+                    $c['due'] !== '' ? sprintf(' title="%s"', self::e($c['due'])) : '',
+                    self::e($t['due_' . $due['kind']]));
+            }
+            if ($tags !== '') {
+                $html .= '<div class="spb-tags">' . $tags . '</div>';
+            }
+        }
 
         $meta = array();
         if ($staff && $c['user'] !== '') {

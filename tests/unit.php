@@ -226,6 +226,95 @@ check('board: panel URL and empty drawer only with panel_url', strpos($html, 'da
     && strpos($html, '<aside class="spb-drawer" hidden') !== false
     && strpos(BoardRenderer::render(BoardModel::build($statuses, array()), $pickerCtx), 'spb-drawer') === false);
 
+// ----------------------------------------------------- sort, due, priority
+
+$rich = array(
+    row(1, 1, 0, array('due_raw' => '', 'urgency' => 3, 'created_raw' => '2026-10-01 10:00:00', 'number' => '000010')),
+    row(2, 1, 0, array('due_raw' => '2026-10-05 12:00:00', 'urgency' => 1, 'created_raw' => '2026-10-03 10:00:00', 'number' => '000002')),
+    row(3, 1, 0, array('due_raw' => '2026-10-02 12:00:00', 'urgency' => 0, 'created_raw' => '2026-10-02 10:00:00', 'number' => '000003')),
+);
+$order = fn($sort) => array_column(BoardModel::build($statuses, $rich, $sort)['columns'][0]['cards'], 'id');
+check('sort: last updated (default)', $order('updated') === array(3, 2, 1) && $order('bogus') === array(3, 2, 1));
+check('sort: due date, no due date last', $order('due') === array(3, 2, 1));
+check('sort: priority, unknown urgency last', $order('priority') === array(2, 1, 3));
+check('sort: newest first', $order('created') === array(2, 3, 1));
+check('sort: number, natural order', $order('number') === array(2, 3, 1));
+
+$now = '2026-10-10 12:00:00';
+check('due: none', BoardModel::dueState('', $now, false) === null);
+check('due: overdue flag wins', BoardModel::dueState('', $now, true)['kind'] === 'overdue'
+    && BoardModel::dueState('2026-10-20 09:00:00', $now, true)['kind'] === 'overdue');
+check('due: past is overdue, earlier today too', BoardModel::dueState('2026-10-09 23:00:00', $now, false)['kind'] === 'overdue'
+    && BoardModel::dueState('2026-10-10 08:00:00', $now, false)['kind'] === 'overdue');
+check('due: later today, tomorrow, in days, later', BoardModel::dueState('2026-10-10 18:00:00', $now, false)['kind'] === 'today'
+    && BoardModel::dueState('2026-10-11 08:00:00', $now, false)['kind'] === 'tomorrow'
+    && BoardModel::dueState('2026-10-15 08:00:00', $now, false) === array('kind' => 'soon', 'days' => 5)
+    && BoardModel::dueState('2026-10-30 08:00:00', $now, false)['kind'] === 'later');
+
+$tagged = BoardModel::build($statuses, array(
+    row(1, 1, 0, array('urgency' => 1, 'priority' => 'Emergency', 'due_raw' => '2026-10-11 09:00:00', 'due' => '10/11/26 9:00 AM')),
+    row(2, 3, 0, array('urgency' => 1, 'priority' => 'Emergency', 'due_raw' => '2026-10-01 09:00:00')),
+    row(3, 1, 0, array('urgency' => 3, 'priority' => 'Normal')),
+));
+$staffTagged = BoardRenderer::render($tagged, array_merge($pickerCtx, array('now' => $now)));
+check('tags: high/emergency priority and due on open agent cards', strpos($staffTagged, 'spb-urgency-1">Emergency') !== false
+    && strpos($staffTagged, 'spb-due-tomorrow" title="10/11/26 9:00 AM">Due tomorrow') !== false);
+$soonTagged = BoardRenderer::render(BoardModel::build($statuses, array(row(1, 1, 0, array('due_raw' => '2026-10-15 09:00:00')))), array_merge($pickerCtx, array('now' => $now)));
+check('tags: due dates days away get no tag', strpos($soonTagged, 'spb-due') === false);
+check('tags: none for normal priority or closed tickets', substr_count($staffTagged, 'spb-prio') === 1
+    && strpos($staffTagged, 'spb-due-overdue') === false);
+$clientTagged = BoardRenderer::render($tagged, array('mode' => 'client', 'ticket_url' => '/t?id=', 'strings' => $strings,
+    'closed_days' => 14, 'max_cards' => 300, 'truncated' => false, 'now' => $now));
+check('tags: never on the client board', strpos($clientTagged, 'spb-tag') === false);
+
+// ---------------------------------------------------------------- lanes
+
+$laneRows = array(
+    row(1, 1, 0, array('org' => 'Globex', 'assignee' => '', 'team' => 'Level 2', 'dept' => 'Sales')),
+    row(2, 2, 0, array('org' => 'Acme', 'assignee' => 'Ann', 'dept' => 'Support')),
+    row(3, 1, 0, array('org' => '', 'assignee' => '', 'team' => '', 'dept' => 'Support')),
+    row(4, 1, 2, array('org' => 'Globex')), // child of 2: lane follows the parent card
+);
+$lb = BoardModel::build($statuses, $laneRows);
+$lanes = BoardModel::lanes($lb, 'org', 'No organisation');
+check('lanes: by organisation, sorted, empty last', array_column($lanes, 'label') === array('Acme', 'Globex', 'No organisation'));
+check('lanes: every lane has every column', count($lanes[0]['columns']) === 3 && $lanes[0]['columns'][1]['cards'][0]['id'] === 2
+    && count($lanes[0]['columns'][1]['cards'][0]['children']) === 1);
+check('lanes: agent falls back to team', array_column(BoardModel::lanes($lb, 'agent', 'Unassigned'), 'label') === array('Ann', 'Level 2', 'Unassigned'));
+check('lanes: department', array_column(BoardModel::lanes($lb, 'dept', '-'), 'label') === array('Sales', 'Support'));
+
+$grouped = BoardRenderer::render($lb, array_merge($pickerCtx, array('lanes' => $lanes, 'group' => 'org', 'limits' => array(1 => 1))));
+check('lanes: one head row, one section per lane', substr_count($grouped, 'class="spb-head-row"') === 1
+    && substr_count($grouped, '<section class="spb-lane"') === 3 && strpos($grouped, 'style="--spb-cols: 3"') !== false);
+check('lanes: cells are columns with status data', substr_count($grouped, 'class="spb-col spb-cell') === 9);
+
+// ------------------------------------------------------ limits, signature
+
+$limits = BoardModel::parseLimits("In progress = 5; open:20,\nClosed=x; Unknown=3; Open=0", $statuses);
+check('limits: by name, case-insensitive, junk skipped', $limits === array(2 => 5, 1 => 20));
+$limited = BoardRenderer::render(BoardModel::build($statuses, array(row(1, 1), row(2, 1))), array_merge($pickerCtx, array('limits' => array(1 => 1))));
+check('limits: column over its limit is marked', strpos($limited, 'class="spb-col-head spb-over"') !== false
+    && strpos($limited, 'data-limit="1"') !== false && strpos($limited, '2 of 1') !== false);
+
+$sigA = BoardModel::signature(array(row(1, 1), row(2, 2)));
+check('signature: order of rows does not matter', $sigA === BoardModel::signature(array(row(2, 2), row(1, 1))));
+check('signature: changes with status, assignee, due', $sigA !== BoardModel::signature(array(row(1, 2), row(2, 2)))
+    && $sigA !== BoardModel::signature(array(row(1, 1, 0, array('assignee' => 'Ann')), row(2, 2)))
+    && $sigA !== BoardModel::signature(array(row(1, 1, 0, array('due_raw' => '2026-10-11 09:00:00')), row(2, 2))));
+
+$session = array();
+check('option: default, select, remember, junk falls back', BoardController::selectedOption(array(), $session, 'sort', BoardModel::SORTS) === 'updated'
+    && BoardController::selectedOption(array('sort' => 'due'), $session, 'sort', BoardModel::SORTS) === 'due'
+    && BoardController::selectedOption(array(), $session, 'sort', BoardModel::SORTS) === 'due'
+    && BoardController::selectedOption(array('sort' => '<x>'), $session, 'sort', BoardModel::SORTS) === 'updated'
+    && BoardController::selectedOption(array('group' => array('org')), $session, 'group', BoardModel::GROUPS) === '');
+
+$live = BoardRenderer::render(BoardModel::build($statuses, array()), array_merge($pickerCtx,
+    array('refresh_url' => '/scp/ajax.php/board/state', 'refresh_seconds' => 60, 'signature' => 'abc')));
+check('live: refresh data on the board, updates button present', strpos($live, 'data-refresh-url="/scp/ajax.php/board/state" data-refresh-seconds="60" data-signature="abc"') !== false
+    && strpos($live, '<button type="button" class="spb-updates" hidden>') !== false
+    && strpos(BoardRenderer::render(BoardModel::build($statuses, array()), $pickerCtx), 'spb-updates') === false);
+
 // --------------------------------------------------------------- settings
 
 $n = BoardController::normalise(array());
@@ -234,6 +323,12 @@ $n = BoardController::normalise(array('closed_days' => '-5', 'max_cards' => '999
 check('clamp: closed_days >= 0, max_cards <= 2000', $n['closed_days'] === 0 && $n['max_cards'] === 2000);
 $n = BoardController::normalise(array('closed_days' => '9999', 'max_cards' => '1'));
 check('clamp: closed_days <= 365, max_cards >= 10', $n['closed_days'] === 365 && $n['max_cards'] === 10);
+check('clamp: refresh off at 0, else 15 to 600, default 60', BoardController::normalise(array())['refresh_seconds'] === 60
+    && BoardController::normalise(array('refresh_seconds' => '0'))['refresh_seconds'] === 0
+    && BoardController::normalise(array('refresh_seconds' => '-1'))['refresh_seconds'] === 0
+    && BoardController::normalise(array('refresh_seconds' => '5'))['refresh_seconds'] === 15
+    && BoardController::normalise(array('refresh_seconds' => '9999'))['refresh_seconds'] === 600);
+check('clamp: column limits text capped', strlen(BoardController::normalise(array('wip_limits' => str_repeat('a', 900)))['wip_limits']) === 500);
 
 // -------------------------------------------------------- output buffering
 

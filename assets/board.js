@@ -1,40 +1,74 @@
 /*
- * Ticket Board for osTicket: drag and drop, quick view and actions for the
- * agent board.
+ * Ticket Board for osTicket: drag and drop, quick view, actions and live
+ * refresh for the agent board.
  *
  * The client board is static HTML; this script only acts on a board with
  * data-mode="staff" and a data-move-url. It never builds markup from ticket
  * data: cards are moved as existing DOM nodes, messages are set via
- * textContent. The one innerHTML is the quick-view panel, which arrives
- * fully rendered and escaped from the server.
+ * textContent. Two places take server-rendered HTML as a whole: the
+ * quick-view panel and, on live refresh, the board element of a fresh copy
+ * of this same page. Both are rendered and escaped on the server.
+ *
+ * All listeners sit on .spb-wrap and delegate, so the board element can be
+ * swapped on live refresh without rebinding anything.
  *
  * Keyboard: focus a card, then Alt+ArrowRight / Alt+ArrowLeft moves it to
- * the neighbouring column, Enter opens the quick view, Escape closes it.
+ * the neighbouring column (within its row when grouped), Enter opens the
+ * quick view, Escape closes it.
  */
 (function () {
   'use strict';
 
-  function init(board) {
-    if (!board || board.dataset.spbReady === '1') return;
-    if (board.dataset.mode !== 'staff' || !board.dataset.moveUrl) return;
-    board.dataset.spbReady = '1';
+  function fmt(template) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    var i = 0;
+    return String(template || '')
+      .replace(/%(\d)\$[sd]/g, function (_, n) { return String(args[Number(n) - 1]); })
+      .replace(/%[sd]/g, function () { return String(args[i++]); });
+  }
+
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf_token"]');
+    return meta ? meta.getAttribute('content') : '';
+  }
+
+  function postForm(url, params) {
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-CSRFToken': csrfToken(),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: params.toString()
+    }).then(function (res) {
+      return res.json().then(
+        function (data) { return { ok: res.ok, data: data }; },
+        function () { return { ok: false, data: {} }; }
+      );
+    });
+  }
+
+  function initWrap(wrap) {
+    if (!wrap || wrap.dataset.spbReady === '1') return;
+    var first = wrap.querySelector('.spb-board');
+    if (!first || first.dataset.mode !== 'staff' || !first.dataset.moveUrl) return;
+    wrap.dataset.spbReady = '1';
 
     var i18n = {};
     try {
-      i18n = JSON.parse(board.dataset.i18n || '{}');
+      i18n = JSON.parse(first.dataset.i18n || '{}');
     } catch (e) {
       i18n = {};
     }
-    var wrap = board.closest('.spb-wrap');
-    var statusLine = wrap ? wrap.querySelector('.spb-status') : null;
+    var statusLine = wrap.querySelector('.spb-status');
     var dragged = null;
     var busy = false;
+    var lastInput = 0;
 
-    function fmt(template) {
-      var args = Array.prototype.slice.call(arguments, 1);
-      return String(template || '').replace(/%[sd]/g, function () {
-        return args.length ? String(args.shift()) : '';
-      });
+    function board() {
+      return wrap.querySelector('.spb-board');
     }
 
     // Toast: shows, then gets out of the way. Errors stay longer.
@@ -54,29 +88,56 @@
       }, isError ? 6000 : 3200);
     }
 
-    function csrfToken() {
-      var meta = document.querySelector('meta[name="csrf_token"]');
-      return meta ? meta.getAttribute('content') : '';
+    // Columns a card can move between: its own row when grouped.
+    function columnsFor(card) {
+      var scope = (card && card.closest('.spb-lane')) || board();
+      return Array.prototype.slice.call(scope.querySelectorAll('.spb-col'));
     }
 
-    function columns() {
-      return Array.prototype.slice.call(board.querySelectorAll('.spb-col'));
+    function sameRow(card, col) {
+      return card.closest('.spb-lane') === col.closest('.spb-lane');
+    }
+
+    function topCards(col) {
+      return col.querySelectorAll('.spb-cards > .spb-card').length;
+    }
+
+    function setCount(head, n) {
+      var count = head.querySelector('.spb-count');
+      if (!count) return;
+      var limit = Number(count.dataset.limit || 0);
+      count.textContent = limit ? fmt(i18n.limit || '%1$d / %2$d', n, limit) : String(n);
+      var over = limit > 0 && n > limit;
+      head.classList.toggle('spb-over', over);
+      if (over) count.title = fmt(i18n.limit_over || '', limit);
+      else count.removeAttribute('title');
     }
 
     function refreshCounts() {
-      columns().forEach(function (col) {
-        var list = col.querySelector('.spb-cards');
-        var n = list.querySelectorAll(':scope > .spb-card').length;
-        col.querySelector('.spb-count').textContent = String(n);
-        var empty = list.querySelector(':scope > .spb-empty');
+      var b = board();
+      Array.prototype.forEach.call(b.querySelectorAll('.spb-col'), function (col) {
+        var n = topCards(col);
+        var head = col.querySelector(':scope > .spb-col-head');
+        if (head) setCount(head, n);
+        var empty = col.querySelector('.spb-cards > .spb-empty');
         if (empty) empty.hidden = n > 0;
+      });
+      Array.prototype.forEach.call(b.querySelectorAll('.spb-col-total'), function (total) {
+        var n = 0;
+        Array.prototype.forEach.call(b.querySelectorAll('.spb-col[data-status-id="' + total.dataset.statusId + '"]'), function (col) {
+          n += topCards(col);
+        });
+        setCount(total.querySelector('.spb-col-head'), n);
+      });
+      Array.prototype.forEach.call(b.querySelectorAll('.spb-lane'), function (lane) {
+        var count = lane.querySelector('.spb-lane-head .spb-count');
+        if (count) count.textContent = String(lane.querySelectorAll('.spb-cards > .spb-card').length);
       });
     }
 
     function move(card, col) {
-      if (busy || !card || !col) return;
-      var from = card.closest('.spb-col');
-      if (from === col) return;
+      if (busy || !card || !col || !sameRow(card, col)) return;
+      if (card.closest('.spb-col') === col) return;
 
       var number = card.dataset.number;
       var statusName = col.dataset.statusName;
@@ -85,26 +146,11 @@
       }
 
       busy = true;
-      var body = new URLSearchParams();
-      body.set('ticket_id', card.dataset.ticketId);
-      body.set('status_id', col.dataset.statusId);
+      var params = new URLSearchParams();
+      params.set('ticket_id', card.dataset.ticketId);
+      params.set('status_id', col.dataset.statusId);
 
-      fetch(board.dataset.moveUrl, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          'X-CSRFToken': csrfToken(),
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: body.toString()
-      })
-        .then(function (res) {
-          return res.json().then(
-            function (data) { return { ok: res.ok, data: data }; },
-            function () { return { ok: false, data: {} }; }
-          );
-        })
+      postForm(board().dataset.moveUrl, params)
         .then(function (r) {
           if (!r.ok || !r.data || !r.data.ok) {
             var detail = r.data && r.data.message ? ' ' + r.data.message : '';
@@ -113,6 +159,7 @@
           }
           col.querySelector('.spb-cards').prepend(card);
           refreshCounts();
+          live.expectOwnChange();
           say(fmt(i18n.moved, number, statusName), false);
           // Confirmation where the eye already is: on the card that moved.
           card.classList.add('spb-landed');
@@ -127,50 +174,86 @@
         });
     }
 
-    board.addEventListener('dragstart', function (e) {
+    // --- Drag and drop and keyboard moves ---------------------------------
+
+    function clearDropping() {
+      Array.prototype.forEach.call(board().querySelectorAll('.spb-dropping'), function (c) {
+        c.classList.remove('spb-dropping');
+      });
+    }
+
+    wrap.addEventListener('dragstart', function (e) {
       var card = e.target.closest && e.target.closest('.spb-card[draggable="true"]');
       if (!card) return;
       dragged = card;
+      lastInput = Date.now();
       card.classList.add('spb-dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', card.dataset.ticketId);
     });
 
-    board.addEventListener('dragend', function () {
+    wrap.addEventListener('dragend', function () {
       if (dragged) dragged.classList.remove('spb-dragging');
       dragged = null;
-      columns().forEach(function (c) { c.classList.remove('spb-dropping'); });
+      clearDropping();
     });
 
-    board.addEventListener('dragover', function (e) {
+    wrap.addEventListener('dragover', function (e) {
       var col = e.target.closest && e.target.closest('.spb-col');
-      if (!col || !dragged) return;
+      if (!col || !dragged || !sameRow(dragged, col)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      columns().forEach(function (c) { c.classList.toggle('spb-dropping', c === col); });
+      if (!col.classList.contains('spb-dropping')) {
+        clearDropping();
+        col.classList.add('spb-dropping');
+      }
     });
 
-    board.addEventListener('drop', function (e) {
+    wrap.addEventListener('drop', function (e) {
       var col = e.target.closest && e.target.closest('.spb-col');
       if (!col || !dragged) return;
       e.preventDefault();
-      col.classList.remove('spb-dropping');
+      clearDropping();
       move(dragged, col);
     });
 
-    board.addEventListener('keydown', function (e) {
+    wrap.addEventListener('keydown', function (e) {
+      lastInput = Date.now();
       if (!e.altKey || (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft')) return;
       var card = e.target.closest && e.target.closest('.spb-card[draggable="true"]');
       if (!card) return;
-      var cols = columns();
-      var i = cols.indexOf(card.closest('.spb-col'));
-      var target = cols[i + (e.key === 'ArrowRight' ? 1 : -1)];
+      var cols = columnsFor(card);
+      var target = cols[cols.indexOf(card.closest('.spb-col')) + (e.key === 'ArrowRight' ? 1 : -1)];
       if (!target) return;
       e.preventDefault();
       move(card, target);
     });
 
-    initPanel(board, wrap, i18n, say, csrfToken);
+    // Someone reading or working on the page counts as busy, not just events
+    // inside the board: keys and clicks anywhere, scrolling, and the pointer
+    // resting on the board.
+    function touched() { lastInput = Date.now(); }
+    ['keydown', 'pointerdown', 'wheel', 'input'].forEach(function (type) {
+      document.addEventListener(type, touched, { passive: true, capture: true });
+    });
+    wrap.addEventListener('pointermove', touched, { passive: true });
+
+    var panel = initPanel(wrap, first, i18n, say);
+    var live = initLive(wrap, i18n, say, {
+      board: board,
+      idle: function () {
+        var popup = document.getElementById('popup');
+        var active = document.activeElement;
+        return !dragged && !busy
+          && Date.now() - lastInput > 8000
+          && !(popup && popup.offsetParent)
+          && !(active && wrap.contains(active) && /^(TEXTAREA|INPUT|SELECT)$/.test(active.tagName));
+      },
+      swapped: function () {
+        refreshCounts();
+        if (panel) panel.refreshIfOpen();
+      }
+    });
     refreshCounts();
   }
 
@@ -181,10 +264,10 @@
    * same way the ticket view's action menu does. After a dialog succeeds,
    * the board reloads and reopens the panel for that ticket.
    */
-  function initPanel(board, wrap, i18n, say, csrfToken) {
+  function initPanel(wrap, board, i18n, say) {
     var panelUrl = board.dataset.panelUrl;
-    var drawer = wrap ? wrap.querySelector('.spb-drawer') : null;
-    if (!panelUrl || !drawer) return;
+    var drawer = wrap.querySelector('.spb-drawer');
+    if (!panelUrl || !drawer) return null;
     var content = drawer.querySelector('.spb-drawer-content');
     var current = null;
     var HASH = /^#spb-ticket=(\d+)$/;
@@ -221,7 +304,6 @@
       current = String(id);
       show();
       drawer.classList.add('spb-loading');
-      content.textContent = '';
       setHash(current);
       fetch(panelUrl + encodeURIComponent(current), { credentials: 'same-origin' })
         .then(function (res) {
@@ -231,7 +313,7 @@
         .then(function (html) {
           if (String(id) !== current) return;
           content.innerHTML = html;
-          drawer.focus();
+          if (!drawer.contains(document.activeElement)) drawer.focus();
         })
         .catch(function () {
           close();
@@ -253,15 +335,15 @@
       location.reload();
     }
 
-    board.addEventListener('click', function (e) {
-      var card = e.target.closest && e.target.closest('.spb-card');
+    wrap.addEventListener('click', function (e) {
+      var card = e.target.closest && e.target.closest('.spb-board .spb-card');
       if (!card || e.target.closest('a, button, summary, .spb-children ul')) return;
       open(card.dataset.ticketId);
     });
 
-    board.addEventListener('keydown', function (e) {
+    wrap.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter' || e.altKey) return;
-      var card = e.target.closest && e.target.closest('.spb-card');
+      var card = e.target.closest && e.target.closest('.spb-board .spb-card');
       if (!card || e.target !== card) return;
       e.preventDefault();
       open(card.dataset.ticketId);
@@ -298,23 +380,9 @@
       if (!form) return;
       e.preventDefault();
       var id = current;
-      var body = new URLSearchParams(new FormData(form));
       var button = form.querySelector('button[type="submit"]');
       if (button) button.disabled = true;
-      fetch(form.getAttribute('action'), {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          'X-CSRFToken': csrfToken(),
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: body.toString()
-      })
-        .then(function (res) {
-          return res.json().then(function (d) { return { ok: res.ok, data: d }; },
-            function () { return { ok: false, data: {} }; });
-        })
+      postForm(form.getAttribute('action'), new URLSearchParams(new FormData(form)))
         .then(function (r) {
           if (r.ok && r.data && r.data.ok) {
             say(String(i18n.note_saved || 'Saved.'), false);
@@ -332,9 +400,109 @@
 
     var m = HASH.exec(location.hash);
     if (m) open(m[1]);
+
+    return {
+      // After a live refresh: reload the panel content too, unless the
+      // agent is typing a note in it.
+      refreshIfOpen: function () {
+        var typing = drawer.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
+        if (current && !typing) open(current);
+      }
+    };
   }
 
-  // Queue picker: switch views on change; the button stays for no-JS use.
+  /*
+   * Live refresh. Every n seconds (only while the tab is visible) the board
+   * asks the server for a fingerprint of what it would show now. If it
+   * changed, the board element is replaced with the one from a fresh copy
+   * of this page, but only while the agent isn't doing anything: not
+   * dragging, typing, in a core dialog, or active in the last 8 seconds.
+   * Otherwise a button offers the update, so nothing moves under the hand.
+   */
+  function initLive(wrap, i18n, say, hooks) {
+    var b = hooks.board();
+    var url = b.dataset.refreshUrl;
+    var seconds = Number(b.dataset.refreshSeconds || 0);
+    var button = wrap.querySelector('.spb-updates');
+    var api = { expectOwnChange: function () {} };
+    if (!url || seconds <= 0) return api;
+
+    var known = b.dataset.signature || '';
+    var pending = false;
+    var own = false;
+    var running = false;
+
+    function stateUrl() {
+      var q = new URLSearchParams(location.search).get('queue');
+      return url + (q ? '?queue=' + encodeURIComponent(q) : '');
+    }
+
+    function swap(quiet) {
+      if (running) return;
+      running = true;
+      if (button) button.disabled = true;
+      var focused = document.activeElement && document.activeElement.closest
+        ? document.activeElement.closest('.spb-card') : null;
+      var focusId = focused ? focused.dataset.ticketId : null;
+      fetch(location.pathname + location.search, { credentials: 'same-origin' })
+        .then(function (res) {
+          if (!res.ok) throw new Error(String(res.status));
+          return res.text();
+        })
+        .then(function (html) {
+          var doc = new DOMParser().parseFromString(html, 'text/html');
+          var fresh = doc.querySelector('.spb-wrap .spb-board');
+          if (!fresh) throw new Error('no board');
+          hooks.board().replaceWith(document.adoptNode(fresh));
+          known = fresh.dataset.signature || known;
+          pending = false;
+          if (button) button.hidden = true;
+          hooks.swapped();
+          if (focusId) {
+            var again = hooks.board().querySelector('.spb-card[data-ticket-id="' + focusId + '"]');
+            if (again) again.focus();
+          }
+          if (!quiet) say(String(i18n.refreshed || 'Board updated.'), false);
+        })
+        .catch(function () { /* next round tries again */ })
+        .then(function () {
+          running = false;
+          if (button) button.disabled = false;
+        });
+    }
+
+    function check() {
+      if (document.hidden || running) return;
+      fetch(stateUrl(), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          if (!data || !data.signature || data.signature === known) return;
+          if (hooks.idle()) {
+            swap(own);
+            own = false;
+          } else if (!own) {
+            pending = true;
+            if (button) button.hidden = false;
+          }
+        })
+        .catch(function () {});
+    }
+
+    if (button) button.addEventListener('click', function () { swap(false); });
+    setInterval(check, seconds * 1000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) check();
+    });
+
+    api.expectOwnChange = function () {
+      // The agent's own move changed the fingerprint; pick that up quietly
+      // instead of announcing it as someone else's update.
+      own = true;
+    };
+    return api;
+  }
+
+  // Pickers: switch views on change; the button stays for no-JS use.
   function initPicker(select) {
     if (select.dataset.spbReady === '1') return;
     select.dataset.spbReady = '1';
@@ -346,7 +514,7 @@
   }
 
   function boot() {
-    Array.prototype.forEach.call(document.querySelectorAll('.spb-board'), init);
+    Array.prototype.forEach.call(document.querySelectorAll('.spb-wrap'), initWrap);
     Array.prototype.forEach.call(document.querySelectorAll('select[data-spb-autosubmit]'), initPicker);
   }
 

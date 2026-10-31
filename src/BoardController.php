@@ -13,13 +13,15 @@ declare(strict_types=1);
  */
 final class BoardController
 {
-    /** @var array{enable_staff:bool, enable_client:bool, client_nav:bool, closed_days:int, max_cards:int} */
+    /** @var array{enable_staff:bool, enable_client:bool, client_nav:bool, closed_days:int, max_cards:int, wip_limits:string, refresh_seconds:int} */
     private static $settings = array(
-        'enable_staff'  => true,
-        'enable_client' => false,
-        'client_nav'    => true,
-        'closed_days'   => 14,
-        'max_cards'     => 300,
+        'enable_staff'    => true,
+        'enable_client'   => false,
+        'client_nav'      => true,
+        'closed_days'     => 14,
+        'max_cards'       => 300,
+        'wip_limits'      => '',
+        'refresh_seconds' => 60,
     );
 
     public static function configure(array $raw): void
@@ -37,12 +39,16 @@ final class BoardController
     {
         $days = (int) ($raw['closed_days'] ?? 14);
         $max = (int) ($raw['max_cards'] ?? 300);
+        $refresh = (int) ($raw['refresh_seconds'] ?? 60);
         return array(
-            'enable_staff'  => (bool) ($raw['enable_staff'] ?? true),
-            'enable_client' => (bool) ($raw['enable_client'] ?? false),
-            'client_nav'    => (bool) ($raw['client_nav'] ?? true),
-            'closed_days'   => max(0, min(365, $days)),
-            'max_cards'     => max(10, min(2000, $max)),
+            'enable_staff'    => (bool) ($raw['enable_staff'] ?? true),
+            'enable_client'   => (bool) ($raw['enable_client'] ?? false),
+            'client_nav'      => (bool) ($raw['client_nav'] ?? true),
+            'closed_days'     => max(0, min(365, $days)),
+            'max_cards'       => max(10, min(2000, $max)),
+            'wip_limits'      => substr((string) ($raw['wip_limits'] ?? ''), 0, 500),
+            // 0 is off; anything else between 15 seconds and 10 minutes.
+            'refresh_seconds' => $refresh <= 0 ? 0 : max(15, min(600, $refresh)),
         );
     }
 
@@ -72,12 +78,54 @@ final class BoardController
 
         $s = self::$settings;
         $strings = BoardI18n::strings(self::language());
+        $view = self::staffView($thisstaff, $_GET);
 
+        $board = BoardModel::build($view['statuses'], $view['result']['rows'], $view['sort']);
+        $lanes = $view['group'] !== ''
+            ? BoardModel::lanes($board, $view['group'], $strings['lane_none_' . $view['group']])
+            : null;
+        $base = ROOT_PATH . BoardPlugin::STAFF_BASE;
+
+        $html = BoardRenderer::render($board, array(
+            'mode'          => 'staff',
+            'ticket_url'    => ROOT_PATH . 'scp/tickets.php?id=',
+            'move_url'      => $base . '/move',
+            'strings'       => $strings,
+            'closed_days'   => $view['queue'] ? 0 : $s['closed_days'],
+            'max_cards'     => $s['max_cards'],
+            'truncated'     => $view['result']['truncated'],
+            'queues'        => BoardQuery::queueOptions($thisstaff),
+            'queue_id'      => $view['queue'] ? (int) $view['queue']->getId() : 0,
+            'queue_missing' => $view['queue_missing'],
+            'queue_action'  => $base,
+            'search_url'    => ROOT_PATH . 'scp/tickets.php',
+            'panel_url'     => $base . '/panel/',
+            'sort'          => $view['sort'],
+            'group'         => $view['group'],
+            'lanes'         => $lanes,
+            'limits'        => BoardModel::parseLimits($s['wip_limits'], $view['statuses']),
+            'now'           => BoardQuery::dbNow(),
+            'refresh_url'   => $s['refresh_seconds'] > 0 ? $base . '/state' : '',
+            'refresh_seconds' => $s['refresh_seconds'],
+            'signature'     => BoardModel::signature($view['result']['rows']),
+        ));
+
+        $q = $view['queue'];
+        return self::page('staff', $q ? $strings['title'] . ': ' . $q->getName() : $strings['title'], $html);
+    }
+
+    /**
+     * Everything that decides which tickets the agent board shows, shared by
+     * the page and the live-refresh check so both always agree.
+     */
+    private static function staffView(Staff $staff, array $get): array
+    {
+        $s = self::$settings;
         if (!isset($_SESSION) || !is_array($_SESSION)) {
             $_SESSION = array();
         }
-        $queueId = self::selectedQueueId($_GET, $_SESSION);
-        $queue = $queueId > 0 ? BoardQuery::queueFor($thisstaff, $queueId) : null;
+        $queueId = self::selectedQueueId($get, $_SESSION);
+        $queue = $queueId > 0 ? BoardQuery::queueFor($staff, $queueId) : null;
         if ($queueId > 0 && !$queue) {
             // Forget it, so the notice shows once and the next visit is clean.
             unset($_SESSION[self::QUEUE_SESSION_KEY]);
@@ -86,31 +134,61 @@ final class BoardController
         if ($queue) {
             // The queue's criteria decide which states show up, so the closed
             // window of the default view doesn't apply; closed columns stay.
-            $result = BoardQuery::forStaffQueue($thisstaff, $queue, $s['max_cards']);
+            $result = BoardQuery::forStaffQueue($staff, $queue, $s['max_cards']);
             $statuses = BoardQuery::statuses(max(1, $s['closed_days']));
         } else {
-            $result = BoardQuery::forStaff($thisstaff, $s['closed_days'], $s['max_cards']);
+            $result = BoardQuery::forStaff($staff, $s['closed_days'], $s['max_cards']);
             $statuses = BoardQuery::statuses($s['closed_days']);
         }
-        $board = BoardModel::build($statuses, $result['rows']);
 
-        $html = BoardRenderer::render($board, array(
-            'mode'          => 'staff',
-            'ticket_url'    => ROOT_PATH . 'scp/tickets.php?id=',
-            'move_url'      => ROOT_PATH . BoardPlugin::STAFF_BASE . '/move',
-            'strings'       => $strings,
-            'closed_days'   => $queue ? 0 : $s['closed_days'],
-            'max_cards'     => $s['max_cards'],
-            'truncated'     => $result['truncated'],
-            'queues'        => BoardQuery::queueOptions($thisstaff),
-            'queue_id'      => $queue ? (int) $queue->getId() : 0,
+        return array(
+            'queue'         => $queue,
             'queue_missing' => $queueId > 0 && !$queue,
-            'queue_action'  => ROOT_PATH . BoardPlugin::STAFF_BASE,
-            'search_url'    => ROOT_PATH . 'scp/tickets.php',
-            'panel_url'     => ROOT_PATH . BoardPlugin::STAFF_BASE . '/panel/',
-        ));
+            'result'        => $result,
+            'statuses'      => $statuses,
+            'sort'          => self::selectedOption($get, $_SESSION, 'sort', BoardModel::SORTS),
+            'group'         => self::selectedOption($get, $_SESSION, 'group', BoardModel::GROUPS),
+        );
+    }
 
-        return self::page('staff', $queue ? $strings['title'] . ': ' . $queue->getName() : $strings['title'], $html);
+    /**
+     * Live refresh: the fingerprint of what the board would show right now.
+     * Same view rules as the page, so a change anywhere that touches the
+     * agent's board changes it. GET only, nothing is written.
+     */
+    public static function staffState(): string
+    {
+        global $thisstaff;
+
+        header('Cache-Control: no-store');
+        if (!self::$settings['enable_staff'] || !($thisstaff instanceof Staff)) {
+            return self::json(404, array('error' => 'not_found'));
+        }
+        if (self::staffGated($thisstaff)) {
+            return self::json(403, array('error' => 'account_action_required'));
+        }
+        $view = self::staffView($thisstaff, array_intersect_key($_GET, array('queue' => 1)));
+        return self::json(200, array(
+            'signature' => BoardModel::signature($view['result']['rows']),
+            'count'     => count($view['result']['rows']),
+        ));
+    }
+
+    /**
+     * A remembered choice from a fixed list: ?<name>=<value> selects and
+     * remembers it, an unknown value falls back to the first entry. Public
+     * for the unit tests.
+     */
+    public static function selectedOption(array $get, array &$session, string $name, array $allowed): string
+    {
+        $key = 'spb:staff_' . $name;
+        if (array_key_exists($name, $get)) {
+            $value = is_string($get[$name]) && in_array($get[$name], $allowed, true) ? $get[$name] : $allowed[0];
+            $session[$key] = $value;
+            return $value;
+        }
+        $value = $session[$key] ?? $allowed[0];
+        return in_array($value, $allowed, true) ? $value : $allowed[0];
     }
 
     public const QUEUE_SESSION_KEY = 'spb:staff_queue';

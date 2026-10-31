@@ -185,6 +185,17 @@ foreach ($order as $i => $key) {
 
 Ticket::lookup($ids['A1'])->logNote('Internal', 'INTERNAL-NOTE-MARKER-7f3a do not show to customers', 'SYSTEM', false);
 
+// Priority and due dates for the card tags and the sort orders:
+//   S1 emergency, X1 high and due tomorrow, G1 overdue since yesterday.
+$prio = function (string $name): int {
+    return (int) scalar(sprintf("SELECT priority_id FROM %s WHERE priority=%s", PRIORITY_TABLE, db_input($name)));
+};
+foreach (array('S1' => 'emergency', 'X1' => 'high') as $key => $name) {
+    q(sprintf("UPDATE %s SET priority=%d WHERE ticket_id=%d", TABLE_PREFIX . 'ticket__cdata', $prio($name), $ids[$key]));
+}
+q(sprintf("UPDATE %s SET duedate=DATE(NOW() + INTERVAL 1 DAY) + INTERVAL 12 HOUR WHERE ticket_id=%d", TICKET_TABLE, $ids['X1']));
+q(sprintf("UPDATE %s SET duedate=NOW() - INTERVAL 1 DAY, isoverdue=1 WHERE ticket_id=%d", TICKET_TABLE, $ids['G1']));
+
 // ---------------------------------------------------------------- agents
 
 $adminId = (int) scalar("SELECT staff_id FROM " . STAFF_TABLE . " ORDER BY staff_id LIMIT 1");
@@ -247,8 +258,11 @@ q(sprintf("INSERT INTO %s (plugin_id, flags, name, notes, created, updated) VALU
     PLUGIN_INSTANCE_TABLE, $pid));
 $iid = (int) db_insert_id();
 $ns = sprintf('plugin.%d.instance.%d', $pid, $iid);
+// Live refresh at its minimum, so the end-to-end test doesn't wait a minute;
+// a limit of 1 on "In Progress" so the over-limit marking has something to show.
 foreach (array('enable_staff' => '1', 'enable_client' => '1', 'client_nav' => '1',
-               'closed_days' => '14', 'max_cards' => '300') as $k => $v) {
+               'closed_days' => '14', 'max_cards' => '300',
+               'refresh_seconds' => '15', 'wip_limits' => 'In Progress=1') as $k => $v) {
     q(sprintf("INSERT INTO %s (namespace, `key`, value, updated) VALUES ('%s', '%s', '%s', NOW())",
         CONFIG_TABLE, $ns, $k, $v));
 }

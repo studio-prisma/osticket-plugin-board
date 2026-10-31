@@ -82,6 +82,8 @@ Als **Nicht-Admin**-Testagent:
 | 4.8 | `/scp/ajax.php/board?queue=<ID der privaten Suche eines anderen Agenten>` öffnen | Hinweis „nicht verfügbar", volles Standard-Board, nichts aus dieser Suche sichtbar |
 | 4.9 | Karte anklicken | Schnellansicht mit Ticket-Vorschau und nur den Aktionen, die die Rolle des Agenten erlaubt |
 | 4.10 | In der Schnellansicht: An Agent zuweisen, jemanden wählen, bestätigen | Zuweisungs-Dialog von osTicket; Board lädt neu, Schnellansicht zeigt die neue Zuweisung, die Ticket-Historie listet sie |
+| 4.12 | Nach Organisation gruppieren, dann eine Karte in die Zeile einer anderen Organisation ziehen | Zeilen pro Organisation; die Karte bleibt in ihrer Zeile |
+| 4.13 | In einem zweiten Browserfenster den Status eines Tickets ändern, das Board nicht anfassen | Innerhalb des Intervalls aktualisiert sich das Board und meldet „Board updated" |
 | 4.11 | Interne Notiz mit `<b>test</b>` speichern | Notiz in der Ticketansicht als wörtlicher Text, nicht fett; im Kundenportal nicht sichtbar |
 
 Abbruch, wenn: 4.3 ein Ticket zeigt, das der Agent in der normalen Ticketansicht nicht öffnen kann. Instanz deaktivieren und melden (siehe SECURITY.md).
