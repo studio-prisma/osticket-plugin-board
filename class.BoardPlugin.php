@@ -42,7 +42,7 @@ require_once __DIR__ . '/src/BoardController.php';
 class BoardPlugin extends Plugin
 {
     /** Mirrors plugin.php; used for cache-busting the asset URLs only. */
-    public const VERSION = '0.1.0';
+    public const VERSION = '0.2.0';
 
     /** Route bases, relative to ROOT_PATH. */
     public const STAFF_BASE = 'scp/ajax.php/board';

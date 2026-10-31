@@ -17,7 +17,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Which tickets | Exactly what the agent's departments, assignments and referrals allow (`Staff::getTicketsVisibility()`, same as the queues) | Own tickets, organisation tickets if the organisation shares them, collaborations if enabled (same three sources as the portal's ticket list) |
 | Filter | Any queue or saved search of the agent panel, picked above the board, remembered per session | No |
 | Change status | Drag and drop, or `Alt+←` / `Alt+→` on a focused card. Closing asks first | No |
-| Quick view | Click or `Enter` on a card: osTicket's ticket preview plus the actions the agent's role allows | No |
+| Quick view | Click or `Enter` on a card: osTicket's ticket preview plus the actions the agent's role allows. Closing a ticket from it moves straight on to the next open card | No |
 | Actions | Status with comment, assign to agent or team, claim, release, transfer, refer, mark answered, change priority, add task: all through osTicket's own dialogs | No |
 | Internal note | From the quick view, as plain text | No |
 | Due and priority | Tags for overdue, due today, due tomorrow, and High/Emergency priority | No |
@@ -108,7 +108,7 @@ Not verified: osTicket 1.17, Nginx, MySQL instead of MariaDB, other portal theme
 - **A moved card stays until reload.** If a status change takes a ticket out of the selected queue (say, closing it in "Open"), the card stays in its new column until the page is reloaded.
 - **Search criteria osTicket doesn't support are ignored**, on the board as in the ticket list. That's osTicket's behaviour for saved searches, not a filter of the plugin.
 - **No reply to the customer from the board.** Replies stay in the ticket view (the quick view links to it). Mark as overdue, merge, link and the full edit form aren't offered either; they're one click away in the ticket view.
-- **The board reloads after a dialog action.** The quick view reopens for the same ticket.
+- **The board reloads after a dialog action.** The quick view reopens for the same ticket, or, after closing it, for the next open card in board order (further down the column, then the next open column). With no open card left, the panel closes.
 - **Notes from the board skip the ticket lock.** osTicket's lock only guards the ticket view's own forms against double posting; the note itself goes through the same `Ticket::postNote()`.
 - **Rows don't change ownership.** In a grouped view a card moves between statuses within its row; dropping it into another organisation's or agent's row does nothing. Reassign through the quick view.
 - **Due tags are for what needs attention:** overdue, today, tomorrow. A due date days away (often just the default SLA) gets no tag; "Sort: Due date" still orders by it.

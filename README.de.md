@@ -17,7 +17,7 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 | Welche Tickets | Genau das, was Abteilungen, Zuweisungen und Weiterleitungen des Agenten erlauben (`Staff::getTicketsVisibility()`, wie in den Queues) | Eigene Tickets, Tickets der Organisation, wenn die Organisation sie teilt, und Mitwirkungen, wenn aktiviert (dieselben drei Quellen wie die Ticketliste im Portal) |
 | Filter | Jede Queue und gespeicherte Suche des Agenten-Panels, über dem Board auswählbar, pro Sitzung gemerkt | Nein |
 | Status ändern | Drag and Drop, oder `Alt+←` / `Alt+→` auf einer fokussierten Karte. Vor dem Schließen kommt eine Rückfrage | Nein |
-| Schnellansicht | Klick oder `Enter` auf eine Karte: die Ticket-Vorschau von osTicket plus die Aktionen, die die Rolle des Agenten erlaubt | Nein |
+| Schnellansicht | Klick oder `Enter` auf eine Karte: die Ticket-Vorschau von osTicket plus die Aktionen, die die Rolle des Agenten erlaubt. Wer ein Ticket darin schließt, landet direkt bei der nächsten offenen Karte | Nein |
 | Aktionen | Status mit Kommentar, an Agent oder Team zuweisen, übernehmen, freigeben, an Abteilung übergeben, weiterleiten, als beantwortet markieren, Priorität ändern, Aufgabe anlegen: alles über die Dialoge von osTicket | Nein |
 | Interne Notiz | Aus der Schnellansicht, als Klartext | Nein |
 | Fälligkeit und Priorität | Markierungen für überfällig, heute fällig, morgen fällig sowie Priorität High/Emergency | Nein |
@@ -108,7 +108,7 @@ Nicht geprüft: osTicket 1.17, Nginx, MySQL statt MariaDB, andere Portal-Themes 
 - **Eine verschobene Karte bleibt bis zum Neuladen.** Fällt ein Ticket durch den Statuswechsel aus der gewählten Queue (etwa beim Schließen in „Open"), bleibt die Karte bis zum Neuladen in ihrer neuen Spalte.
 - **Suchkriterien, die osTicket nicht unterstützt, werden ignoriert**, auf dem Board wie in der Ticketliste. Das ist das Verhalten von osTicket bei gespeicherten Suchen, kein Filter des Plugins.
 - **Keine Antwort an Kunden aus dem Board.** Antworten bleiben in der Ticketansicht (die Schnellansicht verlinkt dorthin). Als überfällig markieren, zusammenführen, verknüpfen und das komplette Bearbeiten-Formular gibt es ebenfalls nicht, sie sind einen Klick entfernt in der Ticketansicht.
-- **Nach einer Dialog-Aktion lädt das Board neu.** Die Schnellansicht öffnet sich wieder für dasselbe Ticket.
+- **Nach einer Dialog-Aktion lädt das Board neu.** Die Schnellansicht öffnet sich wieder für dasselbe Ticket, nach dem Schließen dagegen für die nächste offene Karte in Board-Reihenfolge (weiter unten in der Spalte, dann die nächste offene Spalte). Ist keine offene Karte mehr übrig, schließt sich das Panel.
 - **Notizen aus dem Board übergehen den Ticket-Lock.** Der Lock von osTicket schützt nur die Formulare der Ticketansicht vor doppeltem Absenden; die Notiz selbst läuft über dasselbe `Ticket::postNote()`.
 - **Zeilen wechseln nicht die Zuständigkeit.** In der gruppierten Ansicht wandert eine Karte nur innerhalb ihrer Zeile zwischen den Status; in die Zeile einer anderen Organisation oder Person fallen lassen bewirkt nichts. Neu zuweisen geht über die Schnellansicht.
 - **Fälligkeits-Markierungen zeigen, was Aufmerksamkeit braucht:** überfällig, heute, morgen. Ein Termin in einigen Tagen (oft nur die Standard-SLA) bekommt keine Markierung; „Sortierung: Fälligkeit" ordnet trotzdem danach.

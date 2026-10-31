@@ -330,6 +330,22 @@
       setHash(null);
     }
 
+    /*
+     * The card that comes after this one, in the order the board shows:
+     * further down the same column, then the next open column (row by row
+     * when grouped). Falls back to the card before it when this was the
+     * last one, and to null when it was the only open card. Closed columns
+     * don't count: the point is the next ticket to work on.
+     */
+    function nextOpenCard(id) {
+      var cards = Array.prototype.slice.call(wrap.querySelectorAll(
+        '.spb-board .spb-col[data-state="open"] .spb-cards > .spb-card'));
+      var i = cards.findIndex(function (c) { return c.dataset.ticketId === String(id); });
+      if (i < 0) return null;
+      var next = cards[i + 1] || cards[i - 1];
+      return next ? next.dataset.ticketId : null;
+    }
+
     function reloadWithPanel(id) {
       setHash(id);
       location.reload();
@@ -368,10 +384,14 @@
         location.href = 'tickets.php?id=' + encodeURIComponent(id);
         return;
       }
+      // Closing a ticket from the quick view moves on to the next one, so a
+      // triage run doesn't need a click per ticket to leave the closed one.
+      // Decided before the dialog opens, from the board as it is now.
+      var then = /\/status\/close\//.test(path) ? nextOpenCard(id) : id;
       // Relative on purpose: the page sets <base href=".../scp/">, exactly
       // what the dialog's own form submission relies on.
       $.dialog('ajax.php/' + path + '?_uid=' + Date.now(), [201], function () {
-        reloadWithPanel(id);
+        reloadWithPanel(then);
       });
     });
 

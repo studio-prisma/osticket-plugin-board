@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-31
+
+### Added
+
+- Closing a ticket from the quick view opens the next open card on the board instead of the closed one: further down the same column, then the next open column; the panel closes when no open card is left.
+
 ## [0.1.0] - 2026-10-31
 
 ### Added
@@ -26,5 +32,6 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/studio-prisma/osticket-plugin-board/releases/tag/v0.1.0

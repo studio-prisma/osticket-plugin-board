@@ -87,6 +87,32 @@ test.describe('admin', () => {
     await expect(page.locator(`.spb-col[data-status-name="In Progress"] .spb-card[data-number="${n.X1}"]`)).toHaveCount(1);
   });
 
+  test('closing from the quick view moves on to the next open card', async ({ page }) => {
+    // A card without sub-tickets that has another open card after it.
+    const pair = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('.spb-col[data-state="open"] .spb-cards > .spb-card')];
+      const i = cards.findIndex((c, k) => !c.querySelector('.spb-children') && cards[k + 1]);
+      return i < 0 ? null : { id: cards[i].dataset.ticketId, number: cards[i].dataset.number, next: cards[i + 1].dataset.number };
+    });
+    expect(pair).not.toBeNull();
+
+    await openPanel(page, pair.number);
+    await page.locator('.spb-action-group[data-group="status"] .spb-action', { hasText: 'Resolved' }).click();
+    const dialog = page.locator('#popup');
+    await expect(dialog).toBeVisible();
+    await Promise.all([
+      page.waitForEvent('load'),
+      dialog.locator('button[type="submit"], input[type="submit"]').last().click(),
+    ]);
+    await expect(page.locator('.spb-panel-body')).toHaveAttribute('data-number', pair.next);
+    await expect(page.locator(`.spb-col[data-status-name="Resolved"] .spb-card[data-number="${pair.number}"]`)).toHaveCount(1);
+
+    // Other actions keep the same ticket open (checked in the assign test);
+    // put this one back so later specs see the seeded state.
+    const back = await post(page, '/scp/ajax.php/board/move', `ticket_id=${pair.id}&status_id=${seed.status.open}`);
+    expect(back.status).toBe(200);
+  });
+
   test('internal note: stored as text, visible to agents, never to the customer', async ({ page, browser }) => {
     await openPanel(page, n.A1);
     const text = `<b>${NOTE_MARK}</b> & "quoted"`;
