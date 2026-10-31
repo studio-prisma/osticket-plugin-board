@@ -4,130 +4,199 @@
  * Every colour and radius is a custom property on .spb-wrap. A theme
  * overrides them without touching this file, e.g. in a custom stylesheet:
  *
- *   .spb-wrap { --spb-accent: #330066; --spb-radius: 2px; }
+ *   .spb-wrap { --spb-accent: #330066; --spb-radius: 8px; }
+ *
+ * Design notes: hierarchy comes from type weight and spacing, not from
+ * coloured borders. Status colour appears once per column, as a dot.
+ * Surfaces are separated by soft shadows and hairlines. Motion only on
+ * transform and opacity; every animated surface has a reduced-motion and a
+ * reduced-transparency fallback at the end of the file.
  */
 
 .spb-wrap {
-  --spb-accent: #0e5c8c;
-  --spb-text: #1f2328;
-  --spb-muted: #57606a;
-  --spb-col-bg: #f3f5f7;
+  --spb-accent: #0a66c2;
+  --spb-text: #1d1d1f;
+  --spb-muted: #6e6e73;
+  --spb-faint: #86868b;
+  --spb-col-bg: rgba(0, 0, 0, 0.035);
   --spb-card-bg: #ffffff;
-  --spb-border: #d0d7de;
-  --spb-open: #0e5c8c;
-  --spb-closed: #57606a;
-  --spb-overdue: #b42318;
-  --spb-drop: #e6f0f7;
-  --spb-radius: 6px;
+  --spb-border: rgba(0, 0, 0, 0.1);
+  --spb-open: #0a66c2;
+  --spb-closed: #8e8e93;
+  --spb-overdue: #d70015;
+  --spb-ok: #248a3d;
+  --spb-radius: 10px;
   /* Columns share the width, never narrower than min, never wider than max.
      Only when min does not fit does the board scroll sideways. */
   --spb-col-min: 180px;
   --spb-col-max: 320px;
+  --spb-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --spb-shadow-raised: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 6px 16px rgba(0, 0, 0, 0.1);
+  /* iOS sheet curve: fast start, long gentle settle, no overshoot. */
+  --spb-ease: cubic-bezier(0.32, 0.72, 0, 1);
 
   color: var(--spb-text);
   margin: 0 0 24px;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
 .spb-title {
-  margin: 8px 0 4px;
+  margin: 8px 0 12px;
+  font-size: 1.75em;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
 .spb-hint {
   color: var(--spb-muted);
-  margin: 0 0 8px;
+  font-size: 13px;
+  margin: 0 0 12px;
 }
 
 .spb-warn {
   color: var(--spb-overdue);
 }
 
+/* Toolbar ---------------------------------------------------------------- */
+
 .spb-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  margin: 0 0 10px;
+  gap: 8px 12px;
+  margin: 0 0 8px;
 }
 
 .spb-toolbar label {
+  font-size: 13px;
   font-weight: 600;
+  color: var(--spb-muted);
 }
 
 .spb-toolbar select {
   min-width: 240px;
   max-width: 100%;
+  /* osTicket gives selects a fixed height; with padding the text clipped. */
+  height: auto;
+  line-height: 1.3;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--spb-col-bg);
+  box-shadow: inset 0 0 0 0.5px var(--spb-border);
+  color: var(--spb-text);
+  font: inherit;
+  font-size: 13px;
 }
 
 .spb-manage {
   font-size: 12px;
-  color: var(--spb-muted);
+  color: var(--spb-faint);
+}
+
+/* Status toast: feedback that doesn't push the board around. ----------- */
+
+.spb-status {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 7;
+  max-width: min(520px, calc(100vw - 32px));
+  margin: 0;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(29, 29, 31, 0.86);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  transform: translate(-50%, 0);
+  opacity: 1;
 }
 
 .spb-status:empty {
   display: none;
 }
 
-.spb-status {
-  padding: 6px 10px;
-  border-left: 3px solid var(--spb-accent);
-  background: var(--spb-col-bg);
-  margin: 0 0 8px;
+.spb-status.spb-error {
+  background: var(--spb-overdue);
 }
 
-.spb-status.spb-error {
-  border-left-color: var(--spb-overdue);
+.spb-status.spb-fading {
+  opacity: 0;
+  transform: translate(-50%, 8px);
 }
+
+/* Board and columns ------------------------------------------------------ */
 
 .spb-board {
   display: flex;
   gap: 12px;
   align-items: flex-start;
   overflow-x: auto;
-  padding-bottom: 8px;
+  padding: 2px 2px 12px;
 }
 
 .spb-col {
   flex: 1 0 var(--spb-col-min);
   max-width: var(--spb-col-max);
   background: var(--spb-col-bg);
-  border: 1px solid var(--spb-border);
-  border-radius: var(--spb-radius);
+  border-radius: calc(var(--spb-radius) + 4px);
   min-height: 120px;
   display: flex;
   flex-direction: column;
 }
 
 .spb-col.spb-dropping {
-  background: var(--spb-drop);
-  border-color: var(--spb-accent);
+  background: color-mix(in srgb, var(--spb-accent) 9%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--spb-accent) 45%, transparent);
 }
 
 .spb-col-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 8px 10px;
-  border-bottom: 3px solid var(--spb-open);
+  gap: 8px;
+  padding: 12px 12px 6px;
 }
 
-.spb-state-closed .spb-col-head {
-  border-bottom-color: var(--spb-closed);
+.spb-col-head::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--spb-open);
+}
+
+.spb-state-closed .spb-col-head::before {
+  background: var(--spb-closed);
 }
 
 .spb-col-head h3 {
+  flex: 1;
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .spb-count {
-  font-size: 12px;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
   color: var(--spb-muted);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
 }
 
 .spb-col-note {
-  margin: 6px 10px 0;
+  margin: 0 12px;
   font-size: 11px;
-  color: var(--spb-muted);
+  color: var(--spb-faint);
 }
 
 .spb-cards {
@@ -141,160 +210,222 @@
 }
 
 .spb-empty {
-  color: var(--spb-muted);
+  color: var(--spb-faint);
   font-size: 12px;
-  padding: 4px 2px;
+  padding: 6px 4px;
 }
 
+/* Cards ------------------------------------------------------------------ */
+
 .spb-card {
+  position: relative;
   background: var(--spb-card-bg);
-  border: 1px solid var(--spb-border);
-  border-left: 3px solid var(--spb-accent);
   border-radius: var(--spb-radius);
-  padding: 8px 10px;
+  box-shadow: var(--spb-shadow);
+  padding: 10px 12px 11px;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .spb-card[draggable="true"] {
   cursor: grab;
 }
 
+.spb-board[data-panel-url] .spb-card {
+  cursor: pointer;
+}
+
+.spb-card:hover {
+  box-shadow: var(--spb-shadow-raised);
+}
+
+/* Feedback on press, not on release. */
+.spb-card:active {
+  transform: scale(0.985);
+}
+
 .spb-card.spb-dragging {
-  opacity: 0.5;
+  opacity: 0.4;
+  transform: scale(0.98);
 }
 
-.spb-card:focus {
+.spb-card:focus-visible {
   outline: 2px solid var(--spb-accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
-.spb-card.spb-overdue {
-  border-left-color: var(--spb-overdue);
+/* Settles after a successful move, where the eye already is. */
+.spb-card.spb-landed {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--spb-ok) 55%, transparent), var(--spb-shadow-raised);
 }
 
 .spb-num {
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--spb-faint);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+
+.spb-num:hover {
   color: var(--spb-accent);
 }
 
 .spb-flag {
-  font-size: 11px;
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--spb-overdue) 12%, transparent);
   color: var(--spb-overdue);
+  font-size: 10px;
   font-weight: 600;
+  vertical-align: 1px;
 }
 
 .spb-subject {
   margin: 2px 0 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
   overflow-wrap: anywhere;
 }
 
+/* Meta: labels stay in the markup for screen readers, the values read as
+   one quiet line ("Alice Acme · Support · Unassigned · 10/31 9:43"). */
 .spb-meta {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 1px 8px;
+  display: flex;
+  flex-wrap: wrap;
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--spb-muted);
 }
 
-/* The agent panel styles dt/dd globally (margins, line height); reset them
-   here so the meta block stays compact in both panels. */
-.spb-meta dt,
+.spb-meta dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .spb-meta dd {
   margin: 0;
   padding: 0;
-  line-height: 1.4;
   float: none;
   width: auto;
-}
-
-.spb-meta dt {
-  font-weight: 600;
-}
-
-.spb-meta dd {
   overflow-wrap: anywhere;
 }
 
+/* Who and where on the first line, when on its own second line. The
+   separator hangs at the end of a value, so a wrapped line never starts
+   with one. */
+.spb-meta dd:last-of-type {
+  flex-basis: 100%;
+  color: var(--spb-faint);
+}
+
+.spb-meta dd:has(+ dt + dd:not(:last-of-type))::after {
+  content: "\00B7";
+  margin: 0 5px;
+  color: var(--spb-faint);
+}
+
+/* Sub-tickets ------------------------------------------------------------ */
+
 .spb-children {
-  margin-top: 6px;
-  border-top: 1px dashed var(--spb-border);
-  padding-top: 4px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 0.5px solid var(--spb-border);
   font-size: 12px;
 }
 
 .spb-children summary {
   cursor: pointer;
   color: var(--spb-muted);
+  font-weight: 500;
+  list-style-position: inside;
 }
 
 .spb-children ul {
   list-style: none;
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   padding: 0;
 }
 
 .spb-child {
-  padding: 2px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  padding: 3px 0;
   overflow-wrap: anywhere;
 }
 
+.spb-child a {
+  color: var(--spb-faint);
+  text-decoration: none;
+  font-size: 11px;
+}
+
+.spb-child-subject {
+  flex: 1;
+  min-width: 0;
+}
+
 .spb-badge {
-  display: inline-block;
-  font-size: 10px;
-  padding: 0 6px;
-  border-radius: 10px;
-  border: 1px solid var(--spb-open);
-  color: var(--spb-open);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--spb-muted);
   white-space: nowrap;
 }
 
-.spb-badge.spb-state-closed {
-  border-color: var(--spb-closed);
-  color: var(--spb-closed);
+.spb-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--spb-open);
 }
 
-@media (max-width: 760px) {
-  .spb-board {
-    flex-direction: column;
-    overflow-x: visible;
-  }
-
-  .spb-col {
-    flex-basis: auto;
-    width: 100%;
-    max-width: none;
-  }
+.spb-badge.spb-state-closed::before {
+  background: var(--spb-closed);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .spb-col,
-  .spb-card {
-    transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
-  }
-}
+/* Quick view ------------------------------------------------------------- */
 
-/* Quick view ------------------------------------------------------------ */
-
-.spb-board[data-panel-url] .spb-card {
-  cursor: pointer;
-}
-
-/* Below osTicket's dialog overlay (z-index 9) and dialog (10), so the core
-   dialogs opened from the panel sit on top of it. */
+/* A parallel panel, not a modal: translucent material and a shadow, no
+   scrim, the board stays usable. It sits below osTicket's dialog overlay
+   (z-index 9) and dialog (10), so core dialogs open on top of it. It enters
+   from the right and leaves the same way. */
 .spb-drawer {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(700px, 100vw);
+  width: min(680px, 100vw);
+  box-sizing: border-box;
   z-index: 8;
-  background: var(--spb-card-bg);
-  border-left: 1px solid var(--spb-border);
-  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: -1px 0 0 rgba(0, 0, 0, 0.08), -16px 0 48px rgba(0, 0, 0, 0.12);
   overflow-y: auto;
-  padding: 16px 18px 24px;
+  overscroll-behavior: contain;
+  padding: 20px 24px 32px;
+  transform: translateX(100%);
+}
+
+.spb-drawer.spb-open {
+  transform: translateX(0);
 }
 
 .spb-drawer[hidden] {
@@ -306,68 +437,102 @@
 }
 
 .spb-drawer.spb-loading .spb-drawer-content {
-  opacity: 0.4;
+  opacity: 0.35;
 }
 
 .spb-drawer-close {
   position: absolute;
-  top: 8px;
-  right: 10px;
+  top: 14px;
+  right: 16px;
+  width: 30px;
+  height: 30px;
   border: 0;
-  background: none;
-  font-size: 26px;
-  line-height: 1;
-  cursor: pointer;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.06);
   color: var(--spb-muted);
+  font-size: 20px;
+  line-height: 30px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.spb-drawer-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--spb-text);
+}
+
+.spb-drawer-close:active {
+  transform: scale(0.94);
 }
 
 .spb-panel-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  margin: 0 30px 10px 0;
+  margin: 0 44px 16px 0;
 }
 
 .spb-panel-head h2 {
-  margin: 0;
-  font-size: 18px;
+  color: var(--spb-text);
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
   overflow-wrap: anywhere;
+}
+
+.spb-panel-open {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--spb-accent);
 }
 
 .spb-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 18px;
-  padding: 10px 0;
-  border-top: 1px solid var(--spb-border);
-  border-bottom: 1px solid var(--spb-border);
-  margin-bottom: 12px;
+  gap: 14px 24px;
+  padding: 14px 16px;
+  margin: 0 0 18px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.035);
 }
 
 .spb-action-group h3 {
-  margin: 0 0 4px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--spb-muted);
 }
 
 .spb-action {
-  margin: 0 4px 4px 0;
-  padding: 3px 9px;
-  border: 1px solid var(--spb-border);
-  border-radius: var(--spb-radius);
-  background: var(--spb-col-bg);
+  margin: 0 6px 6px 0;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--spb-card-bg);
+  box-shadow: var(--spb-shadow);
   color: var(--spb-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  font-size: 12px;
 }
 
-.spb-action:hover,
-.spb-action:focus {
-  border-color: var(--spb-accent);
+.spb-action:hover {
   color: var(--spb-accent);
+}
+
+.spb-action:active {
+  transform: scale(0.97);
+}
+
+.spb-action:focus-visible {
+  outline: 2px solid var(--spb-accent);
+  outline-offset: 2px;
+}
+
+/* The panel head already names the ticket; the preview's own title would
+   say it twice. */
+.spb-preview > div > h2:first-child {
+  display: none;
 }
 
 /* The core preview template sets a fixed 600px width inline. */
@@ -381,18 +546,147 @@
 }
 
 .spb-note {
-  margin-top: 14px;
-  border-top: 1px solid var(--spb-border);
-  padding-top: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 0.5px solid var(--spb-border);
 }
 
 .spb-note label {
   display: block;
+  font-size: 13px;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .spb-note textarea {
   width: 100%;
   box-sizing: border-box;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--spb-card-bg);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.spb-note textarea:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--spb-accent) 60%, transparent);
+}
+
+.spb-note .spb-hint {
+  margin: 6px 0 10px;
+  font-size: 12px;
+}
+
+.spb-note button[type="submit"] {
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--spb-accent);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.spb-note button[type="submit"]:active {
+  transform: scale(0.97);
+}
+
+.spb-note button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Small screens ---------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .spb-board {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+
+  .spb-col {
+    flex-basis: auto;
+    width: 100%;
+    max-width: none;
+  }
+
+  .spb-drawer {
+    padding: 16px 16px 28px;
+  }
+}
+
+/* Motion: only transform and opacity, nothing that blocks input. -------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .spb-card {
+    transition: box-shadow 160ms ease, transform 120ms ease-out, opacity 160ms ease;
+  }
+
+  .spb-col {
+    transition: background-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  .spb-drawer {
+    transition: transform 340ms var(--spb-ease);
+  }
+
+  .spb-status {
+    transition: opacity 220ms ease, transform 220ms var(--spb-ease);
+  }
+
+  .spb-action,
+  .spb-drawer-close,
+  .spb-note button[type="submit"] {
+    transition: transform 100ms ease-out, color 120ms ease;
+  }
+}
+
+/* Reduced motion: the panel cross-fades instead of sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .spb-drawer {
+    transform: none;
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+
+  .spb-drawer.spb-open {
+    opacity: 1;
+  }
+
+  .spb-card:active,
+  .spb-card.spb-dragging {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .spb-drawer {
+    background: #fff;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .spb-status {
+    background: #1d1d1f;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .spb-card,
+  .spb-action {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  }
+
+  .spb-meta,
+  .spb-num,
+  .spb-hint {
+    color: var(--spb-text);
+  }
 }

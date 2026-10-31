@@ -37,10 +37,21 @@
       });
     }
 
+    // Toast: shows, then gets out of the way. Errors stay longer.
+    var sayTimer = null;
     function say(text, isError) {
       if (!statusLine) return;
+      clearTimeout(sayTimer);
+      statusLine.classList.remove('spb-fading');
       statusLine.textContent = text;
       statusLine.classList.toggle('spb-error', !!isError);
+      sayTimer = setTimeout(function () {
+        statusLine.classList.add('spb-fading');
+        sayTimer = setTimeout(function () {
+          statusLine.textContent = '';
+          statusLine.classList.remove('spb-fading');
+        }, 260);
+      }, isError ? 6000 : 3200);
     }
 
     function csrfToken() {
@@ -103,6 +114,9 @@
           col.querySelector('.spb-cards').prepend(card);
           refreshCounts();
           say(fmt(i18n.moved, number, statusName), false);
+          // Confirmation where the eye already is: on the card that moved.
+          card.classList.add('spb-landed');
+          setTimeout(function () { card.classList.remove('spb-landed'); }, 900);
           card.focus();
         })
         .catch(function () {
@@ -180,9 +194,32 @@
       history.replaceState(null, '', id ? base + '#spb-ticket=' + id : base);
     }
 
+    // Open and close only toggle a class; the CSS transition runs from the
+    // current position, so closing mid-slide reverses instead of jumping.
+    // `hidden` is set once the slide-out has finished, and cleared again if
+    // the panel reopens in the meantime.
+    var hideTimer = null;
+    function show() {
+      clearTimeout(hideTimer);
+      drawer.hidden = false;
+      void drawer.offsetWidth; // start the transition from the off-screen position
+      drawer.classList.add('spb-open');
+    }
+
+    function hide() {
+      drawer.classList.remove('spb-open');
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(function () {
+        if (!drawer.classList.contains('spb-open')) {
+          drawer.hidden = true;
+          content.textContent = '';
+        }
+      }, 380);
+    }
+
     function open(id) {
       current = String(id);
-      drawer.hidden = false;
+      show();
       drawer.classList.add('spb-loading');
       content.textContent = '';
       setHash(current);
@@ -207,8 +244,7 @@
 
     function close() {
       current = null;
-      drawer.hidden = true;
-      content.textContent = '';
+      hide();
       setHash(null);
     }
 

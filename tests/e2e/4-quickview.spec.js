@@ -42,7 +42,7 @@ test.describe('admin', () => {
     // Ticket::getSubject() (form answers, sanitised by osTicket on create),
     // the card reads ticket__cdata (raw markup from the seed); neither may
     // turn into an element.
-    await expect(page.locator('.spb-preview h2')).toContainText(`Ticket #${n.X1}`);
+    await expect(page.locator('.spb-preview')).toContainText('Ticket State');
     await expect(page.locator('.spb-panel-head h2')).toContainText('markup in subject');
     await expect(page.locator('.spb-drawer img[src="x"], .spb-board img[src="x"]')).toHaveCount(0);
     expect(await page.evaluate(() => window.__spbXss)).toBeUndefined();

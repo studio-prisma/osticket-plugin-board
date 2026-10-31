@@ -69,10 +69,12 @@ Kurzfassung:
 Farben und Radien sind CSS-Variablen auf `.spb-wrap`. Überschreiben im eigenen Stylesheet:
 
 ```css
-.spb-wrap { --spb-accent: #330066; --spb-radius: 2px; }
+.spb-wrap { --spb-accent: #330066; --spb-radius: 8px; }
 ```
 
 Alle Variablen stehen oben in [assets/board.css](assets/board.css).
+
+Das Board folgt den Systemeinstellungen für reduzierte Bewegung (die Schnellansicht blendet über, statt zu gleiten), reduzierte Transparenz (deckendes Panel) und erhöhten Kontrast.
 
 ---
 

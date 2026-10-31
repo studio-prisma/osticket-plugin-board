@@ -69,10 +69,12 @@ Short version:
 Colours and radii are CSS custom properties on `.spb-wrap`. Override them from your own stylesheet:
 
 ```css
-.spb-wrap { --spb-accent: #330066; --spb-radius: 2px; }
+.spb-wrap { --spb-accent: #330066; --spb-radius: 8px; }
 ```
 
 All properties: top of [assets/board.css](assets/board.css).
+
+The board follows the system settings for reduced motion (the quick view fades instead of sliding), reduced transparency (solid panel) and increased contrast.
 
 ---
 

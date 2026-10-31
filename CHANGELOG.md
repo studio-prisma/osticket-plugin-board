@@ -17,6 +17,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Portal navigation entry via output buffer, without core patches.
 - Settings: agent board, client board, navigation link, closed-ticket window, card limit.
 - Colours and radii as CSS custom properties for themes.
+- Visual design: hierarchy from type, not coloured borders; one status dot per column; quick view as a translucent panel that slides in and out on the same path; toast and an on-card confirmation after a move; press feedback; `prefers-reduced-motion`, `prefers-reduced-transparency` and `prefers-contrast` variants.
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
