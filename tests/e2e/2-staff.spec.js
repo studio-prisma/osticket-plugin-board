@@ -185,3 +185,67 @@ test.describe('agent with a pending password change', () => {
     expect(r.body.error).toBe('account_action_required');
   });
 });
+
+test.describe('queues and saved searches as filters', () => {
+  test.beforeEach(async ({ page }) => {
+    await staffLogin(page, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
+    await page.goto('/scp/ajax.php/board?queue=all');
+  });
+
+  async function pick(page, label) {
+    await Promise.all([
+      page.waitForURL(/queue=\d+/),
+      page.selectOption('#spb-queue', { label }),
+    ]);
+    await page.locator('.spb-board').waitFor({ state: 'attached' });
+  }
+
+  test('lists the agent panel queues and own searches, never someone else\'s', async ({ page }) => {
+    const options = await page.$$eval('#spb-queue option', (els) => els.map((e) => e.textContent.trim()));
+    for (const name of ['Open', 'My Tickets', 'Closed', 'Acme tickets']) expect(options).toContain(name);
+    expect(options).not.toContain('Sales private search');
+    await expect(page.locator('.spb-toolbar .spb-show')).toBeHidden(); // JS replaced the button
+  });
+
+  test('a saved search filters the board and stays selected', async ({ page }) => {
+    const errors = watchErrors(page);
+    await pick(page, 'Acme tickets');
+    await expect(page.locator('h1.spb-title')).toHaveText('Board: Acme tickets');
+
+    const cards = await page.$$eval('.spb-card', (els) => els.map((e) => e.dataset.number).sort());
+    expect(cards).toEqual([n.A1, n.A5, n.X1].sort());
+    // Sub-tickets come along as context, also from outside the search.
+    await expect(page.locator(`.spb-card[data-number="${n.A1}"] .spb-children summary`)).toHaveText('4 sub-tickets');
+
+    await page.goto('/scp/ajax.php/board');
+    await expect(page.locator('h1.spb-title')).toHaveText('Board: Acme tickets');
+    await expect(page.locator('#spb-queue option:checked')).toHaveText('Acme tickets');
+
+    await page.goto('/scp/ajax.php/board?queue=all');
+    await expect(page.locator('h1.spb-title')).toHaveText('Board');
+    expect(await boardNumbers(page)).toEqual(Object.values(n).sort());
+    expect(errors).toEqual([]);
+  });
+
+  test('a queue applies its criteria: Closed shows closed tickets only', async ({ page }) => {
+    await pick(page, 'Closed');
+    const states = await page.$$eval('.spb-card', (els) => els.map((e) => e.closest('.spb-col').dataset.state));
+    expect(states.length).toBeGreaterThan(0);
+    expect(new Set(states)).toEqual(new Set(['closed']));
+    await expect(page.locator(`.spb-card[data-number="${n.A1}"]`)).toHaveCount(0);
+  });
+
+  test('another agent\'s private search by URL: notice, full board, nothing leaked', async ({ page }) => {
+    await page.goto(`/scp/ajax.php/board?queue=${seed.searches.sales}`);
+    await expect(page.locator('.spb-toolbar + .spb-warn')).toBeVisible();
+    await expect(page.locator('h1.spb-title')).toHaveText('Board');
+    expect(await page.content()).not.toContain('Sales private search');
+    // Same answer as for an ID that doesn't exist.
+    const foreign = await page.locator('.spb-warn').first().textContent();
+    await page.goto('/scp/ajax.php/board?queue=999999');
+    expect(await page.locator('.spb-warn').first().textContent()).toBe(foreign);
+    // Not remembered.
+    await page.goto('/scp/ajax.php/board');
+    await expect(page.locator('.spb-warn')).toHaveCount(0);
+  });
+});

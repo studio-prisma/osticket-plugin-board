@@ -72,20 +72,66 @@ final class BoardController
 
         $s = self::$settings;
         $strings = BoardI18n::strings(self::language());
-        $result = BoardQuery::forStaff($thisstaff, $s['closed_days'], $s['max_cards']);
-        $board = BoardModel::build(BoardQuery::statuses($s['closed_days']), $result['rows']);
+
+        if (!isset($_SESSION) || !is_array($_SESSION)) {
+            $_SESSION = array();
+        }
+        $queueId = self::selectedQueueId($_GET, $_SESSION);
+        $queue = $queueId > 0 ? BoardQuery::queueFor($thisstaff, $queueId) : null;
+        if ($queueId > 0 && !$queue) {
+            // Forget it, so the notice shows once and the next visit is clean.
+            unset($_SESSION[self::QUEUE_SESSION_KEY]);
+        }
+
+        if ($queue) {
+            // The queue's criteria decide which states show up, so the closed
+            // window of the default view doesn't apply; closed columns stay.
+            $result = BoardQuery::forStaffQueue($thisstaff, $queue, $s['max_cards']);
+            $statuses = BoardQuery::statuses(max(1, $s['closed_days']));
+        } else {
+            $result = BoardQuery::forStaff($thisstaff, $s['closed_days'], $s['max_cards']);
+            $statuses = BoardQuery::statuses($s['closed_days']);
+        }
+        $board = BoardModel::build($statuses, $result['rows']);
 
         $html = BoardRenderer::render($board, array(
-            'mode'        => 'staff',
-            'ticket_url'  => ROOT_PATH . 'scp/tickets.php?id=',
-            'move_url'    => ROOT_PATH . BoardPlugin::STAFF_BASE . '/move',
-            'strings'     => $strings,
-            'closed_days' => $s['closed_days'],
-            'max_cards'   => $s['max_cards'],
-            'truncated'   => $result['truncated'],
+            'mode'          => 'staff',
+            'ticket_url'    => ROOT_PATH . 'scp/tickets.php?id=',
+            'move_url'      => ROOT_PATH . BoardPlugin::STAFF_BASE . '/move',
+            'strings'       => $strings,
+            'closed_days'   => $queue ? 0 : $s['closed_days'],
+            'max_cards'     => $s['max_cards'],
+            'truncated'     => $result['truncated'],
+            'queues'        => BoardQuery::queueOptions($thisstaff),
+            'queue_id'      => $queue ? (int) $queue->getId() : 0,
+            'queue_missing' => $queueId > 0 && !$queue,
+            'queue_action'  => ROOT_PATH . BoardPlugin::STAFF_BASE,
+            'search_url'    => ROOT_PATH . 'scp/tickets.php',
         ));
 
-        return self::page('staff', $strings['title'], $html);
+        return self::page('staff', $queue ? $strings['title'] . ': ' . $queue->getName() : $strings['title'], $html);
+    }
+
+    public const QUEUE_SESSION_KEY = 'spb:staff_queue';
+
+    /**
+     * Which queue the board shows. ?queue=<id> selects and remembers it,
+     * ?queue=all goes back to the default view; without the parameter the
+     * remembered choice applies. Access is checked by the caller.
+     */
+    public static function selectedQueueId(array $get, array &$session): int
+    {
+        if (array_key_exists('queue', $get)) {
+            $raw = is_string($get['queue']) ? $get['queue'] : '';
+            $id = ctype_digit($raw) ? (int) $raw : 0;
+            if ($id > 0) {
+                $session[self::QUEUE_SESSION_KEY] = $id;
+            } else {
+                unset($session[self::QUEUE_SESSION_KEY]);
+            }
+            return $id;
+        }
+        return (int) ($session[self::QUEUE_SESSION_KEY] ?? 0);
     }
 
     public static function staffMove(): string

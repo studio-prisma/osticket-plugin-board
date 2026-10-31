@@ -157,8 +157,20 @@
     refreshCounts();
   }
 
+  // Queue picker: switch views on change; the button stays for no-JS use.
+  function initPicker(select) {
+    if (select.dataset.spbReady === '1') return;
+    select.dataset.spbReady = '1';
+    var button = select.form && select.form.querySelector('.spb-show');
+    if (button) button.hidden = true;
+    select.addEventListener('change', function () {
+      select.form.submit();
+    });
+  }
+
   function boot() {
     Array.prototype.forEach.call(document.querySelectorAll('.spb-board'), init);
+    Array.prototype.forEach.call(document.querySelectorAll('select[data-spb-autosubmit]'), initPicker);
   }
 
   if (document.readyState === 'loading') {

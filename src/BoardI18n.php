@@ -28,6 +28,13 @@ final class BoardI18n
             'moved'        => 'Ticket #%s moved to "%s".',
             'drag_hint'    => 'Drag a card to another column to change its status.',
             'readonly'     => 'Read-only overview of your tickets.',
+            'queue_label'  => 'View',
+            'queue_all'    => 'All tickets I can see',
+            'queue_group'  => 'Queues',
+            'search_group' => 'Saved searches',
+            'queue_show'   => 'Show',
+            'queue_missing' => 'This queue or search is not available. Showing all tickets.',
+            'queue_manage' => 'Create and save searches under Tickets, then Search.',
         ),
         'de' => array(
             'title'        => 'Board',
@@ -48,6 +55,13 @@ final class BoardI18n
             'moved'        => 'Ticket #%s nach „%s" verschoben.',
             'drag_hint'    => 'Karte in eine andere Spalte ziehen, um den Status zu ändern.',
             'readonly'     => 'Übersicht Ihrer Tickets, nur zum Lesen.',
+            'queue_label'  => 'Ansicht',
+            'queue_all'    => 'Alle Tickets, die ich sehen darf',
+            'queue_group'  => 'Queues',
+            'search_group' => 'Gespeicherte Suchen',
+            'queue_show'   => 'Anzeigen',
+            'queue_missing' => 'Diese Queue oder Suche ist nicht verfügbar. Angezeigt werden alle Tickets.',
+            'queue_manage' => 'Suchen anlegen und speichern unter Tickets, dann Suche.',
         ),
     );
 

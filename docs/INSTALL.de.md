@@ -78,6 +78,8 @@ Als **Nicht-Admin**-Testagent:
 | 4.4 | Testticket in einen anderen offenen Status ziehen | Meldung „Ticket #… verschoben", Karte bleibt nach Neuladen dort, die Ticket-Historie zeigt den Statuswechsel |
 | 4.5 | In einen geschlossenen Status ziehen, Abbrechen | Nichts ändert sich |
 | 4.6 | Mit einer Rolle ohne Schließen-Recht: in geschlossenen Status ziehen und bestätigen | Fehlermeldung, Karte bleibt |
+| 4.7 | Unter „Ansicht" eine Queue wählen, z. B. „My Tickets", dann eine eigene gespeicherte Suche | Dieselben Tickets wie diese Queue oder Suche unter Tickets; die Auswahl bleibt nach Neuladen erhalten |
+| 4.8 | `/scp/ajax.php/board?queue=<ID der privaten Suche eines anderen Agenten>` öffnen | Hinweis „nicht verfügbar", volles Standard-Board, nichts aus dieser Suche sichtbar |
 
 Abbruch, wenn: 4.3 ein Ticket zeigt, das der Agent in der normalen Ticketansicht nicht öffnen kann. Instanz deaktivieren und melden (siehe SECURITY.md).
 

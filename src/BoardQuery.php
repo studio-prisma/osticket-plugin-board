@@ -49,6 +49,102 @@ final class BoardQuery
         return self::fetch($q, $limit, true);
     }
 
+    // ------------------------------------------------------------------
+    // Queues and saved searches as board filters
+    // ------------------------------------------------------------------
+
+    /**
+     * Queues and saved searches the agent may open, in the order and
+     * nesting of the agent panel's navigation. Same source and the same
+     * checkAccess() as include/staff/templates/queue-navigation.tmpl.php and
+     * queue-savedsearches-nav.tmpl.php.
+     *
+     * @return array<int, array{id:int, label:string, depth:int, group:string}>
+     */
+    public static function queueOptions(Staff $staff): array
+    {
+        $out = array();
+        $walk = static function (array $nodes, int $depth, string $group) use (&$walk, &$out, $staff) {
+            foreach ($nodes as $node) {
+                list($q, $children) = $node;
+                if (!$q->checkAccess($staff) || ((int) $q->get('flags') & CustomQueue::FLAG_DISABLED)) {
+                    continue;
+                }
+                $out[] = array(
+                    'id'    => (int) $q->getId(),
+                    'label' => (string) $q->getName(),
+                    'depth' => $depth,
+                    'group' => $group,
+                );
+                $walk($children ?: array(), $depth + 1, $group);
+            }
+        };
+        $walk(CustomQueue::getHierarchicalQueues($staff), 0, 'queue');
+        $walk(SavedQueue::getHierarchicalQueues($staff), 0, 'search');
+        return $out;
+    }
+
+    /**
+     * The queue or saved search with this ID, if the agent may use it.
+     * Unknown and foreign-private answer the same (null), so the board can't
+     * be used to probe for other agents' searches.
+     */
+    public static function queueFor(Staff $staff, int $id)
+    {
+        if ($id <= 0 || !($q = SavedQueue::lookup($id))) {
+            return null;
+        }
+        if (!$q->checkAccess($staff) || ((int) $q->get('flags') & CustomQueue::FLAG_DISABLED)) {
+            return null;
+        }
+        // Ticket queues only ('T'). getRoot() maps every root to 'Ticket',
+        // so the raw column is checked.
+        return in_array((string) $q->get('root'), array('T', ''), true) ? $q : null;
+    }
+
+    /**
+     * Tickets of a queue or saved search, with the visibility rules of
+     * include/staff/templates/queue-tickets.tmpl.php:
+     *
+     *   - the agent's visibility applies, except for the agent's own saved
+     *     search when the agent may search everything;
+     *   - queues hide sub-tickets as rows.
+     *
+     * Hidden sub-tickets are then loaded for the parents on the board, so the
+     * cards still carry them. Those always get the agent's visibility; a
+     * sub-ticket is only context, never a reason to widen what an agent sees.
+     *
+     * @return array{rows: array, truncated: bool}
+     */
+    public static function forStaffQueue(Staff $staff, $queue, int $limit): array
+    {
+        $q = $queue->getBasicQuery();
+
+        $isQueue = $queue->isAQueue() || $queue->isASubQueue();
+        if (!$queue->ignoreVisibilityConstraints($staff) || $isQueue) {
+            $q->filter($staff->getTicketsVisibility());
+        }
+        if ($isQueue) {
+            $q->filter(Q::any(array('ticket_pid' => null, 'flags__hasbit' => Ticket::FLAG_LINKED)));
+        }
+
+        $result = self::fetch($q, $limit, true);
+
+        $parents = array_column($result['rows'], 'id');
+        if ($parents) {
+            $have = array_flip($parents);
+            $kids = Ticket::objects()
+                ->filter(array('ticket_pid__in' => $parents))
+                ->filter($staff->getTicketsVisibility());
+            foreach (self::fetch($kids, $limit, true)['rows'] as $row) {
+                if (!isset($have[$row['id']])) {
+                    $result['rows'][] = $row;
+                }
+            }
+        }
+        return $result;
+    }
+
     /**
      * @return array{rows: array, truncated: bool}
      */

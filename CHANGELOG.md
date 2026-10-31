@@ -10,6 +10,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 - Agent board under Applications → Board: one column per open and closed status, cards with requester, department, assignee, last update and overdue flag.
 - Status change by drag and drop or `Alt+←` / `Alt+→`, with the permission checks of the core status dialog and a confirmation before closing.
+- Queues and saved searches of the agent panel as board filters: picker above the board, same access check and visibility rules as the ticket list, choice remembered per session.
 - Read-only client board in the portal (off by default), limited to the tickets the portal's own ticket list shows.
 - Sub-tickets from `ticket_pid`, folded under their top-most visible parent, each with its own status.
 - Portal navigation entry via output buffer, without core patches.

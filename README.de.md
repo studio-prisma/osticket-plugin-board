@@ -15,9 +15,12 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 |---|---|---|
 | Wo | Applications → Board (`/scp/ajax.php/board`) | „Board" in der Portal-Navigation (`/ajax.php/board`) |
 | Welche Tickets | Genau das, was Abteilungen, Zuweisungen und Weiterleitungen des Agenten erlauben (`Staff::getTicketsVisibility()`, wie in den Queues) | Eigene Tickets, Tickets der Organisation, wenn die Organisation sie teilt, und Mitwirkungen, wenn aktiviert (dieselben drei Quellen wie die Ticketliste im Portal) |
+| Filter | Jede Queue und gespeicherte Suche des Agenten-Panels, über dem Board auswählbar, pro Sitzung gemerkt | Nein |
 | Status ändern | Drag and Drop, oder `Alt+←` / `Alt+→` auf einer fokussierten Karte. Vor dem Schließen kommt eine Rückfrage | Nein |
 | Pro Karte | Nummer, Betreff, Anfragende Person, Abteilung, Zuweisung, letzte Änderung, Überfällig-Markierung | Nummer, Betreff, Abteilung, letzte Änderung |
 | Unter-Tickets | Eingeklappte Liste unter dem Eltern-Ticket, jeweils mit eigenem Status | Ebenso, beschränkt auf Unter-Tickets, die der Kunde sehen darf |
+
+**Die Filter sind die von osTicket.** Das Board hat kein eigenes Filtersystem. Die Auswahl „Ansicht" listet die Queues und gespeicherten Suchen, die der Agent unter Tickets sieht, mit derselben Zugriffsprüfung (öffentliche Queues, eigene private Suchen, nie die eines anderen Agenten). Filter legt man an und speichert sie dort, wo man es gewohnt ist: Tickets, dann Suche, dann Speichern. Das Board übernimmt ihre Kriterien und dieselben Sichtbarkeitsregeln wie die Ticketliste. Unter-Tickets, die eine Queue als Zeilen ausblendet, erscheinen trotzdem eingeklappt unter dem Eltern-Ticket, beschränkt auf das, was der Agent sehen darf.
 
 Unter-Tickets kommen aus `ost_ticket.ticket_pid`. In diese Spalte schreiben die Merge-Funktion von osTicket und die gängigen Unter-Ticket-Plugins. Thread-Einträge werden nie geladen, interne Notizen können also auf keinem der beiden Boards landen.
 
@@ -55,7 +58,7 @@ Kurzfassung:
 | Agent board | an | Eintrag unter Applications, Routen unter `/scp/ajax.php/board` |
 | Client board | **aus** | Board nur zum Lesen im Portal. Aus heißt: die Route antwortet mit 404 |
 | Client navigation link | an | „Board" in der Portal-Navigation. Aus: nur per URL erreichbar |
-| Closed tickets, days | 14 | Geschlossene Spalten zeigen Tickets, die in diesem Zeitraum geschlossen wurden. `0` blendet sie aus |
+| Closed tickets, days | 14 | In der Standardansicht zeigen geschlossene Spalten Tickets, die in diesem Zeitraum geschlossen wurden. `0` blendet sie aus. Ist eine Queue oder Suche gewählt, entscheiden deren Kriterien |
 | Maximum cards per board | 300 | Tickets pro Seitenaufruf, neueste Aktivität zuerst (10 bis 2000) |
 
 Farben und Radien sind CSS-Variablen auf `.spb-wrap`. Überschreiben im eigenen Stylesheet:
@@ -88,6 +91,8 @@ Nicht geprüft: osTicket 1.17, Nginx, MySQL statt MariaDB, andere Portal-Themes 
 ## Bekannte Grenzen
 
 - **Eine Seite, kein Blättern.** Das Board zeigt höchstens „Maximum cards" Tickets, neueste Aktivität zuerst. Fehlen Tickets, erscheint ein Hinweis.
+- **Eine verschobene Karte bleibt bis zum Neuladen.** Fällt ein Ticket durch den Statuswechsel aus der gewählten Queue (etwa beim Schließen in „Open"), bleibt die Karte bis zum Neuladen in ihrer neuen Spalte.
+- **Suchkriterien, die osTicket nicht unterstützt, werden ignoriert**, auf dem Board wie in der Ticketliste. Das ist das Verhalten von osTicket bei gespeicherten Suchen, kein Filter des Plugins.
 - **Nur der Status.** Ziehen ändert den Status. Zuweisung, Priorität, Abteilung und Reihenfolge innerhalb einer Spalte ändert das Board nicht.
 - **Kinder ziehen nicht mit.** Eine Eltern-Karte zu verschieben ändert nur das Eltern-Ticket. Unter-Tickets behalten ihren Status.
 - **Eine Ebene sichtbar.** Tiefere Hierarchien werden unter dem obersten sichtbaren Vorfahren zusammengefasst.

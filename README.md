@@ -15,9 +15,12 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 |---|---|---|
 | Where | Applications → Board (`/scp/ajax.php/board`) | "Board" in the portal navigation (`/ajax.php/board`) |
 | Which tickets | Exactly what the agent's departments, assignments and referrals allow (`Staff::getTicketsVisibility()`, same as the queues) | Own tickets, organisation tickets if the organisation shares them, collaborations if enabled (same three sources as the portal's ticket list) |
+| Filter | Any queue or saved search of the agent panel, picked above the board, remembered per session | No |
 | Change status | Drag and drop, or `Alt+←` / `Alt+→` on a focused card. Closing asks first | No |
 | Shown per card | Number, subject, requester, department, assignee, last update, overdue flag | Number, subject, department, last update |
 | Sub-tickets | Folded list under the parent, each with its own status | Same, limited to sub-tickets the client may see |
+
+**Filters are osTicket's own.** The board has no filter system of its own. The "View" picker lists the queues and saved searches the agent sees under Tickets, with the same access check (public queues, own private searches, never another agent's). Filters are created and saved where they always are: Tickets, then Search, then Save. The board applies their criteria and the same visibility rules as the ticket list. Sub-tickets the queue hides as rows still show up folded under their parent, limited to what the agent may see.
 
 Sub-tickets are read from `ost_ticket.ticket_pid`. That's the column osTicket's merge feature and the common sub-ticket plugins write. No thread entries are loaded, so internal notes can't reach either board.
 
@@ -55,7 +58,7 @@ Short version:
 | Agent board | on | Entry under Applications, routes under `/scp/ajax.php/board` |
 | Client board | **off** | Read-only board in the portal. Off means the route answers 404 |
 | Client navigation link | on | "Board" in the portal navigation. Off: reachable by URL only |
-| Closed tickets, days | 14 | Closed columns show tickets closed within this window. `0` hides closed columns |
+| Closed tickets, days | 14 | In the default view, closed columns show tickets closed within this window. `0` hides closed columns. With a queue or search selected, its criteria decide instead |
 | Maximum cards per board | 300 | Tickets loaded per page view, newest activity first (10 to 2000) |
 
 Colours and radii are CSS custom properties on `.spb-wrap`. Override them from your own stylesheet:
@@ -88,6 +91,8 @@ Not verified: osTicket 1.17, Nginx, MySQL instead of MariaDB, other portal theme
 ## Known limitations
 
 - **One page, no paging.** The board shows at most "Maximum cards" tickets, newest activity first. A notice appears when tickets were left out.
+- **A moved card stays until reload.** If a status change takes a ticket out of the selected queue (say, closing it in "Open"), the card stays in its new column until the page is reloaded.
+- **Search criteria osTicket doesn't support are ignored**, on the board as in the ticket list. That's osTicket's behaviour for saved searches, not a filter of the plugin.
 - **Status only.** Dragging changes the status. Assignment, priority, department and order within a column aren't changed from the board.
 - **Children don't follow.** Moving a parent card changes the parent only. Sub-tickets keep their status.
 - **One level shown.** Deeper hierarchies are flattened under the top-most visible ancestor.

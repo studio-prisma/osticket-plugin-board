@@ -15,7 +15,9 @@ final class BoardRenderer
      * @param array $board  result of BoardModel::build()
      * @param array $ctx    mode ('staff'|'client'), ticket_url (prefix, id is
      *                      appended), move_url (staff only), strings (BoardI18n),
-     *                      closed_days, max_cards, truncated
+     *                      closed_days, max_cards, truncated; staff only:
+     *                      queues (BoardQuery::queueOptions), queue_id,
+     *                      queue_missing, queue_action, search_url
      */
     public static function render(array $board, array $ctx): string
     {
@@ -37,6 +39,9 @@ final class BoardRenderer
 
         $out = array();
         $out[] = '<div class="spb-wrap">';
+        if ($staff && isset($ctx['queues'], $ctx['queue_action'])) {
+            $out[] = self::queuePicker($ctx);
+        }
         $out[] = sprintf('<p class="spb-hint">%s</p>', self::e($staff ? $t['drag_hint'] : $t['readonly']));
         if (!empty($ctx['truncated'])) {
             $out[] = sprintf('<p class="spb-hint spb-warn">%s</p>', self::e(sprintf($t['truncated'], (int) $ctx['max_cards'])));
@@ -50,6 +55,50 @@ final class BoardRenderer
 
         $out[] = '</div></div>';
         return implode("\n", $out);
+    }
+
+    /**
+     * GET form with one select: the default view, then queues, then saved
+     * searches, nested like the agent panel's navigation. Works without
+     * JavaScript (button), board.js submits on change.
+     */
+    private static function queuePicker(array $ctx): string
+    {
+        $t = $ctx['strings'];
+        $current = (int) ($ctx['queue_id'] ?? 0);
+
+        $groups = array('queue' => array(), 'search' => array());
+        foreach ($ctx['queues'] as $q) {
+            $group = $q['group'] === 'search' ? 'search' : 'queue';
+            $groups[$group][] = sprintf(
+                '<option value="%d"%s>%s%s</option>',
+                (int) $q['id'],
+                (int) $q['id'] === $current ? ' selected' : '',
+                str_repeat("\u{00A0}\u{00A0}\u{00A0}", max(0, (int) $q['depth'])),
+                self::e($q['label'])
+            );
+        }
+
+        $html = sprintf('<form class="spb-toolbar" method="get" action="%s">', self::e($ctx['queue_action']));
+        $html .= sprintf('<label for="spb-queue">%s</label> ', self::e($t['queue_label']));
+        $html .= '<select id="spb-queue" name="queue" data-spb-autosubmit>';
+        $html .= sprintf('<option value="all"%s>%s</option>', $current === 0 ? ' selected' : '', self::e($t['queue_all']));
+        if ($groups['queue']) {
+            $html .= sprintf('<optgroup label="%s">%s</optgroup>', self::e($t['queue_group']), implode('', $groups['queue']));
+        }
+        if ($groups['search']) {
+            $html .= sprintf('<optgroup label="%s">%s</optgroup>', self::e($t['search_group']), implode('', $groups['search']));
+        }
+        $html .= '</select> ';
+        $html .= sprintf('<button type="submit" class="spb-show">%s</button>', self::e($t['queue_show']));
+        if (!empty($ctx['search_url'])) {
+            $html .= sprintf(' <a class="spb-manage" href="%s">%s</a>', self::e($ctx['search_url']), self::e($t['queue_manage']));
+        }
+        $html .= '</form>';
+        if (!empty($ctx['queue_missing'])) {
+            $html .= sprintf('<p class="spb-hint spb-warn">%s</p>', self::e($t['queue_missing']));
+        }
+        return $html;
     }
 
     private static function column(array $col, array $ctx, bool $staff): string

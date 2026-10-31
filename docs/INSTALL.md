@@ -78,6 +78,8 @@ As the **non-admin** test agent:
 | 4.4 | Drag a test ticket to another open status | Message "Ticket #… moved", card stays there after reload, ticket history shows the status change |
 | 4.5 | Drag it to a closed status, click Cancel | Nothing changes |
 | 4.6 | With a role that may not close tickets: drag to a closed status and confirm | Error message, card stays |
+| 4.7 | Pick a queue under "View", e.g. "My Tickets", then one of your saved searches | Same tickets as that queue or search under Tickets; the choice is still set after reload |
+| 4.8 | Open `/scp/ajax.php/board?queue=<ID of another agent's private search>` | Notice "not available", full default board, nothing of that search shown |
 
 Stop if: 4.3 shows a ticket the agent can't open in the normal ticket view. Disable the instance and report it (see SECURITY.md).
 

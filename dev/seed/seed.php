@@ -20,6 +20,8 @@
  *   A1 carries an internal note with a marker string that must never show up.
  *   Agents: the installer's admin (all departments), salesagent (Sales only,
  *   role "View only": may look, may not change status).
+ *   Saved searches: "Acme tickets" (admin, private, by organisation) and
+ *   "Sales private search" (salesagent, private).
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -212,6 +214,27 @@ if (!$agent->save()) {
 $agent->setPassword($agentPass);
 $agent->save();
 
+// -------------------------------------------------------- saved searches
+
+// Private searches, stored the way Tickets > Search > Save stores them.
+// The admin's one filters by requester domain (a field osTicket supports in
+// searches; unsupported fields are ignored silently). The agent's one must never be
+// usable by the admin (private means owner only, admins included).
+function search(string $title, int $staffId, array $criteria): int
+{
+    q(sprintf("INSERT INTO %s (parent_id, flags, staff_id, sort, title, config, root, path, created, updated)
+               VALUES (0, 0, %d, 0, %s, %s, 'T', '/', NOW(), NOW())",
+        TABLE_PREFIX . 'queue', $staffId, db_input($title),
+        db_input(json_encode(array('criteria' => $criteria, 'conditions' => array())))));
+    return (int) db_insert_id();
+}
+
+$searches = array(
+    'acme'  => search('Acme tickets', $adminId, array(array('user__emails__address', 'contains', '@acme.example'))),
+    'sales' => search('Sales private search', (int) $agent->getId(),
+        array(array('status__state', 'includes', array('open' => 'Open')))),
+);
+
 // ---------------------------------------------------------------- plugin
 
 $plugin = $ost->plugins->install('board');
@@ -241,4 +264,5 @@ echo json_encode(array(
     'numbers' => array_map(fn($id) => Ticket::lookup($id)->getNumber(), $ids),
     'status'  => array('open' => $open, 'in_progress' => $inProgress, 'closed' => $closed),
     'plugin'  => array('id' => $pid, 'instance' => $iid),
+    'searches' => $searches,
 ), JSON_PRETTY_PRINT) . "\n";

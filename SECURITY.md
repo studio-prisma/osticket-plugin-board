@@ -30,6 +30,7 @@ Expected response: an acknowledgement within 7 days, an assessment within 30. Th
 - **Ticket data rendered as markup** (subject, requester, department, status names) on either board.
 - **Internal notes, agent names or other agent-only fields** reaching the client board.
 - **Response bodies that tell an existing-but-invisible ticket apart from a non-existent one** on `/scp/ajax.php/board/move`.
+- **Using a queue or saved search the agent has no access to**, e.g. another agent's private search via `?queue=<id>`, or telling such a search apart from a non-existent ID.
 - **Path traversal or arbitrary file reads** through the asset route.
 
 ## Out of Scope

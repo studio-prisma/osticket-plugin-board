@@ -132,6 +132,43 @@ check('nav: page without portal nav untouched', NavInjector::inject('<ul><li>x</
 check('nav: unterminated list untouched', NavInjector::inject('<ul id="nav">', '/a', 'B', false) === '<ul id="nav">');
 check('nav: active flag and escaping', strpos(NavInjector::inject($page, '/a?"x', '<B>', true), 'class="spb-nav active" href="/a?&quot;x">&lt;B&gt;</a>') !== false);
 
+// ------------------------------------------------------------ queue picker
+
+$queues = array(
+    array('id' => 1, 'label' => 'Open', 'depth' => 0, 'group' => 'queue'),
+    array('id' => 2, 'label' => 'Overdue', 'depth' => 1, 'group' => 'queue'),
+    array('id' => 20, 'label' => '<b>Acme</b> "mine"', 'depth' => 0, 'group' => 'search'),
+);
+$pickerCtx = array('mode' => 'staff', 'ticket_url' => '/scp/tickets.php?id=', 'move_url' => '/m',
+    'strings' => $strings, 'closed_days' => 0, 'max_cards' => 300, 'truncated' => false,
+    'queues' => $queues, 'queue_id' => 2, 'queue_missing' => false,
+    'queue_action' => '/scp/ajax.php/board', 'search_url' => '/scp/tickets.php');
+$html = BoardRenderer::render(BoardModel::build($statuses, array()), $pickerCtx);
+check('picker: GET form to the board route', strpos($html, '<form class="spb-toolbar" method="get" action="/scp/ajax.php/board">') !== false);
+check('picker: default view first, current queue selected', strpos($html, '<option value="all">') !== false
+    && strpos($html, '<option value="2" selected>') !== false && substr_count($html, ' selected') === 1);
+check('picker: queues and searches in separate groups', strpos($html, '<optgroup label="Queues">') < strpos($html, '<optgroup label="Saved searches">'));
+check('picker: sub-queue indented', strpos($html, "<option value=\"2\" selected>\u{00A0}\u{00A0}\u{00A0}Overdue</option>") !== false);
+check('picker: names escaped', strpos($html, '<b>Acme') === false && strpos($html, '&lt;b&gt;Acme&lt;/b&gt; &quot;mine&quot;') !== false);
+check('picker: no missing notice by default', strpos($html, $strings['queue_missing']) === false);
+$html = BoardRenderer::render(BoardModel::build($statuses, array()), array_merge($pickerCtx, array('queue_id' => 0, 'queue_missing' => true)));
+check('picker: missing notice, default view selected', strpos($html, $strings['queue_missing']) !== false
+    && strpos($html, '<option value="all" selected>') !== false);
+check('picker: never on the client board', strpos(BoardRenderer::render(BoardModel::build($statuses, array()),
+    array_merge($pickerCtx, array('mode' => 'client'))), 'spb-toolbar') === false);
+
+$session = array();
+check('queue: no parameter, nothing remembered', BoardController::selectedQueueId(array(), $session) === 0);
+check('queue: ?queue=5 selects and remembers', BoardController::selectedQueueId(array('queue' => '5'), $session) === 5
+    && BoardController::selectedQueueId(array(), $session) === 5);
+check('queue: ?queue=all forgets', BoardController::selectedQueueId(array('queue' => 'all'), $session) === 0
+    && BoardController::selectedQueueId(array(), $session) === 0);
+$session = array();
+check('queue: junk is the default view, not remembered', BoardController::selectedQueueId(array('queue' => '5 OR 1=1'), $session) === 0
+    && BoardController::selectedQueueId(array('queue' => array('5')), $session) === 0
+    && BoardController::selectedQueueId(array('queue' => '-3'), $session) === 0
+    && $session === array());
+
 // --------------------------------------------------------------- settings
 
 $n = BoardController::normalise(array());
