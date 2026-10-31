@@ -446,9 +446,29 @@ final class BoardRenderer
         }
         $html .= '</div>';
 
-        $html .= sprintf('<div class="spb-preview">%s</div>', $p['preview_html']);
+        $html .= sprintf('<div class="spb-preview">%s</div>',
+            self::threadHeading((string) $p['preview_html'], (string) ($t['panel_thread'] ?? '')));
 
         return $html . '</div>';
+    }
+
+    /**
+     * The core preview keeps the thread behind a tab; the quick view shows
+     * it under the summary instead (CSS) and gives it a heading here. Only
+     * the first element with id="threadPreview" gets one; without it, e.g.
+     * on another osTicket version, the preview stays as it is. Public for
+     * the unit tests.
+     */
+    public static function threadHeading(string $preview, string $label): string
+    {
+        if ($label === '') {
+            return $preview;
+        }
+        $heading = sprintf('<h3 class="spb-thread-heading">%s</h3>', self::e($label));
+        $out = preg_replace_callback('#<div\b[^>]*\bid="threadPreview"[^>]*>#', static function ($m) use ($heading) {
+            return $heading . $m[0];
+        }, $preview, 1);
+        return is_string($out) ? $out : $preview;
     }
 
     /** A picker that opens under its button; each entry runs the action. */

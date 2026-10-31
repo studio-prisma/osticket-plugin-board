@@ -579,6 +579,19 @@
         .catch(function () { failed(null); });
     }
 
+    // Thread entries in the preview: older ones come collapsed; a click
+    // opens one, a click on the header of an open one folds it again. The
+    // core binds this in an inline script, which innerHTML doesn't run.
+    drawer.addEventListener('click', function (e) {
+      var entry = e.target.closest && e.target.closest('.spb-preview .thread-preview-entry');
+      if (!entry || e.target.closest('a')) return;
+      if (entry.classList.contains('collapsed')) {
+        entry.classList.remove('collapsed');
+      } else if (e.target.closest('.header')) {
+        entry.classList.add('collapsed');
+      }
+    });
+
     drawer.addEventListener('submit', function (e) {
       var form = e.target.closest && e.target.closest('form.spb-note');
       if (!form) return;
