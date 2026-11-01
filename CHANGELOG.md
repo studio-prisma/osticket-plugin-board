@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-01
+
 ### Added
 
 - The quick view lists the ticket's tasks above the preview: number (opens the task), title, assignee, due date with overdue marked, and status. Open tasks come first, earliest due date first; completed ones are folded below. A ticket without tasks says "No tasks.". Agent board only, never on the client board.
@@ -83,7 +85,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.1...v0.3.2

@@ -46,7 +46,7 @@ require_once __DIR__ . '/src/BoardLanding.php';
 class BoardPlugin extends Plugin
 {
     /** Mirrors plugin.php; used for cache-busting the asset URLs only. */
-    public const VERSION = '0.4.0';
+    public const VERSION = '0.5.0';
 
     /** Route bases, relative to ROOT_PATH. */
     public const STAFF_BASE = 'scp/ajax.php/board';

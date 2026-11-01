@@ -9,7 +9,7 @@
 
 return array(
     'id'          => 'studio-prisma:board',
-    'version'     => '0.4.0',
+    'version'     => '0.5.0',
     'ost_version' => '1.18',
     'name'        => 'Ticket Board',
     'author'      => 'Studio Prisma',
