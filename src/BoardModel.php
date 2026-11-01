@@ -257,6 +257,33 @@ final class BoardModel
     }
 
     /**
+     * Quick-view order for a ticket's tasks: open ones first, those with a
+     * due date by due date, then the rest by number; closed ones after, the
+     * most recently closed first.
+     *
+     * @param array<int, array{open:bool, number:string, due_raw?:string, closed_raw?:string}> $tasks
+     */
+    public static function sortTasks(array $tasks): array
+    {
+        usort($tasks, static function ($a, $b) {
+            if ($a['open'] !== $b['open']) {
+                return $a['open'] ? -1 : 1;
+            }
+            if ($a['open']) {
+                $da = (string) ($a['due_raw'] ?? '');
+                $db = (string) ($b['due_raw'] ?? '');
+                if (($da === '') !== ($db === '')) {
+                    return $da === '' ? 1 : -1;
+                }
+                return strcmp($da, $db) ?: strnatcmp($a['number'], $b['number']);
+            }
+            return strcmp((string) ($b['closed_raw'] ?? ''), (string) ($a['closed_raw'] ?? ''))
+                ?: strnatcmp($b['number'], $a['number']);
+        });
+        return $tasks;
+    }
+
+    /**
      * Fingerprint of what a board shows, for the live refresh. Changes when
      * a ticket appears, disappears, moves, gets reassigned, re-prioritised,
      * re-dated or re-parented; not on fields the board doesn't show.
