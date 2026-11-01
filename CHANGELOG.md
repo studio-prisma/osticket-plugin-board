@@ -4,6 +4,16 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
+### Added
+
+- Setting "Status abbreviations" (off by default): the variable name of a property of the Ticket Status list. Agent board column heads then show the status's value for that property instead of its name; the full name is the tooltip and stays the heading's text for screen readers. Statuses without a value keep their name. The client board always shows full names.
+
+### Fixed
+
+- Statuses disabled in the status list (Admin Panel, Lists, Ticket Status) no longer show up as empty columns, as quick-view status buttons or in the settings' status pickers. A disabled status keeps its column, marked, while tickets still sit in it, so they don't drop off the board; cards can be moved out of it but not into it. The move and action endpoints refuse a disabled status, as osTicket's own status menu doesn't offer one.
+
 ## [0.3.3] - 2026-10-31
 
 ### Added
@@ -65,7 +75,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.0...v0.3.1

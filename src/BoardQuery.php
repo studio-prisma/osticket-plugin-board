@@ -17,9 +17,22 @@ final class BoardQuery
     /** States that get a column. Archived and deleted never do. */
     private const STATES = array('open', 'closed');
 
-    /** @return array<int, array{id:int, name:string, state:string, sort:int}> */
-    public static function statuses(int $closedDays): array
+    /**
+     * Open and closed statuses, disabled ones included and marked: the board
+     * still needs them for tickets that sit in them (BoardModel::build()).
+     * Choice lists filter on `enabled`.
+     *
+     * "Enabled" is the ENABLED bit of the `mode` column, read through
+     * TicketStatus::isEnabled(), the same bit TicketStatusList::getItems()
+     * filters on for the core status menus.
+     *
+     * @param string $abbrevVar  variable name of a Ticket Status list
+     *        property whose value becomes `abbrev`; '' for none
+     * @return array<int, array{id:int, name:string, state:string, sort:int, enabled:bool, abbrev:string}>
+     */
+    public static function statuses(int $closedDays, string $abbrevVar = ''): array
     {
+        $field = $abbrevVar !== '' ? self::propertyFieldId($abbrevVar) : 0;
         $out = array();
         foreach (TicketStatus::objects() as $s) {
             $state = strtolower((string) $s->getState());
@@ -30,13 +43,38 @@ final class BoardQuery
                 continue;
             }
             $out[] = array(
-                'id'    => (int) $s->getId(),
-                'name'  => (string) $s->getLocalName(),
-                'state' => $state,
-                'sort'  => (int) $s->getSortOrder(),
+                'id'      => (int) $s->getId(),
+                'name'    => (string) $s->getLocalName(),
+                'state'   => $state,
+                'sort'    => (int) $s->getSortOrder(),
+                'enabled' => (bool) $s->isEnabled(),
+                'abbrev'  => $field > 0 ? BoardModel::abbrevFrom($s->get('properties'), $field, $abbrevVar) : '',
             );
         }
         return $out;
+    }
+
+    /**
+     * ID of the Ticket Status list property with this variable name, 0 if
+     * there is none. Properties are fields of the list's own form (type
+     * "L<list id>"), which is where Admin Panel, Lists, Ticket Status,
+     * Properties adds them. Request path only: the plugin bootstrap runs
+     * before osTicket can load lists.
+     */
+    private static function propertyFieldId(string $name): int
+    {
+        if (!class_exists('DynamicList') || !class_exists('DynamicFormField')
+            || !($list = DynamicList::lookup(array('type' => 'ticket-status')))) {
+            return 0;
+        }
+        foreach (DynamicFormField::objects()
+            ->filter(array('form__type' => 'L' . (int) $list->getId(), 'name' => $name))
+            ->values_flat('id', 'name') as $row) {
+            if (strcasecmp((string) $row[1], $name) === 0) {
+                return (int) $row[0];
+            }
+        }
+        return 0;
     }
 
     /**

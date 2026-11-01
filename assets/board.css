@@ -224,6 +224,35 @@
   color: var(--spb-faint);
 }
 
+/* Abbreviated column head (setting "Status abbreviations"): the short form
+   is shown, the full name is the tooltip and the text screen readers get. */
+.spb-abbreviated {
+  cursor: help;
+}
+
+.spb-abbrev {
+  letter-spacing: 0.04em;
+}
+
+.spb-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A status disabled in the status list, shown only while it holds cards. */
+.spb-col[data-disabled] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--spb-border);
+}
+
 .spb-cards {
   list-style: none;
   margin: 0;

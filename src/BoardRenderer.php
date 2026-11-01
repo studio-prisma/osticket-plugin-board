@@ -181,11 +181,17 @@ final class BoardRenderer
         $t = $ctx['strings'];
         $limit = (int) ($ctx['limits'][(int) $status['id']] ?? 0);
         $over = $limit > 0 && $count > $limit;
+        // Agent board only: customers don't know the abbreviations.
+        $abbrev = ($ctx['mode'] ?? 'client') === 'staff' ? (string) ($status['abbrev'] ?? '') : '';
+        $heading = $abbrev !== ''
+            ? sprintf('<h3 class="spb-abbreviated" title="%1$s"><span class="spb-abbrev" aria-hidden="true">%2$s</span>'
+                . '<span class="spb-sr">%1$s</span></h3>', self::e($status['name']), self::e($abbrev))
+            : sprintf('<h3>%s</h3>', self::e($status['name']));
         return sprintf(
-            '<%1$s class="spb-col-head%2$s"><h3>%3$s</h3><span class="spb-count"%4$s%5$s>%6$s</span></%1$s>',
+            '<%1$s class="spb-col-head%2$s">%3$s<span class="spb-count"%4$s%5$s>%6$s</span></%1$s>',
             $tag,
             $over ? ' spb-over' : '',
-            self::e($status['name']),
+            $heading,
             $limit > 0 ? sprintf(' data-limit="%d"', $limit) : '',
             $over ? sprintf(' title="%s"', self::e(sprintf($t['limit_over'], $limit))) : '',
             self::e($limit > 0 ? sprintf($t['limit'], $count, $limit) : (string) $count)
@@ -197,19 +203,35 @@ final class BoardRenderer
         $t = $ctx['strings'];
         $s = $col['status'];
         $html = sprintf(
-            '<section class="spb-col spb-state-%s" data-status-id="%d" data-status-name="%s" data-state="%s">',
+            '<section class="spb-col spb-state-%s" data-status-id="%d" data-status-name="%s" data-state="%s"%s>',
             self::e($s['state']),
             (int) $s['id'],
             self::e($s['name']),
-            self::e($s['state'])
+            self::e($s['state']),
+            self::disabledAttr($s, $staff)
         );
         $html .= self::columnHead($s, count($col['cards']), $staff ? $ctx : array_merge($ctx, array('limits' => array())), 'header');
+        if ($staff && self::isDisabled($s)) {
+            $html .= sprintf('<p class="spb-col-note spb-disabled-note">%s</p>', self::e($t['status_disabled']));
+        }
         if ($s['state'] === 'closed' && !empty($ctx['closed_days'])) {
             $html .= sprintf('<p class="spb-col-note">%s</p>', self::e(sprintf($t['closed_hint'], (int) $ctx['closed_days'])));
         }
         $html .= self::cards($col, $ctx, $staff);
         $html .= '</section>';
         return $html;
+    }
+
+    /** Disabled in the status list: shown while it holds cards, never a drop target. */
+    private static function isDisabled(array $status): bool
+    {
+        return array_key_exists('enabled', $status) && !$status['enabled'];
+    }
+
+    /** board.js skips columns with data-disabled when dragging or moving by keyboard. */
+    private static function disabledAttr(array $status, bool $staff): string
+    {
+        return $staff && self::isDisabled($status) ? ' data-disabled="1"' : '';
     }
 
     private static function cards(array $col, array $ctx, bool $staff): string
@@ -243,6 +265,9 @@ final class BoardRenderer
             $html .= sprintf('<div class="spb-col-total spb-state-%s" data-status-id="%d">',
                 self::e($col['status']['state']), (int) $col['status']['id']);
             $html .= self::columnHead($col['status'], count($col['cards']), $ctx, 'div');
+            if (self::isDisabled($col['status'])) {
+                $html .= sprintf('<p class="spb-col-note spb-disabled-note">%s</p>', self::e($t['status_disabled']));
+            }
             $html .= '</div>';
         }
         $html .= '</div>';
@@ -260,11 +285,12 @@ final class BoardRenderer
             foreach ($lane['columns'] as $col) {
                 $s = $col['status'];
                 $html .= sprintf(
-                    '<div class="spb-col spb-cell spb-state-%s" data-status-id="%d" data-status-name="%s" data-state="%s">',
+                    '<div class="spb-col spb-cell spb-state-%s" data-status-id="%d" data-status-name="%s" data-state="%s"%s>',
                     self::e($s['state']),
                     (int) $s['id'],
                     self::e($s['name']),
-                    self::e($s['state'])
+                    self::e($s['state']),
+                    self::disabledAttr($s, true)
                 );
                 $html .= self::cards($col, $ctx, true) . '</div>';
             }

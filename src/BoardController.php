@@ -27,6 +27,7 @@ final class BoardController
         'next_to'         => array(),
         'next_from'       => array(),
         'next_from_acts'  => array('status'),
+        'status_abbrev'   => '',
     );
 
     public static function configure(array $raw): void
@@ -59,7 +60,19 @@ final class BoardController
             'next_to'         => array_map('intval', self::keyList($raw['next_to_statuses'] ?? null, '/^[1-9]\d{0,9}$/')),
             'next_from'       => array_map('intval', self::keyList($raw['next_from_statuses'] ?? null, '/^[1-9]\d{0,9}$/')),
             'next_from_acts'  => self::keyList($raw['next_from_actions'] ?? null, '/^(status|assign|transfer|priority|mark)$/') ?: array('status'),
+            'status_abbrev'   => self::variableName($raw['status_abbrev_var'] ?? ''),
         );
+    }
+
+    /**
+     * A list property's variable name as osTicket allows it (letters,
+     * digits, underscore), lower-cased; anything else is '' (option off).
+     * Public for the unit tests.
+     */
+    public static function variableName($raw): string
+    {
+        $name = is_string($raw) ? strtolower(trim($raw)) : '';
+        return preg_match('/^[a-z0-9_]{1,64}$/', $name) ? $name : '';
     }
 
     /**
@@ -175,10 +188,10 @@ final class BoardController
             // The queue's criteria decide which states show up, so the closed
             // window of the default view doesn't apply; closed columns stay.
             $result = BoardQuery::forStaffQueue($staff, $queue, $s['max_cards']);
-            $statuses = BoardQuery::statuses(max(1, $s['closed_days']));
+            $statuses = BoardQuery::statuses(max(1, $s['closed_days']), $s['status_abbrev']);
         } else {
             $result = BoardQuery::forStaff($staff, $s['closed_days'], $s['max_cards']);
-            $statuses = BoardQuery::statuses($s['closed_days']);
+            $statuses = BoardQuery::statuses($s['closed_days'], $s['status_abbrev']);
         }
 
         return array(
@@ -297,7 +310,10 @@ final class BoardController
     {
         $status = $statusId > 0 ? TicketStatus::lookup($statusId) : null;
         $state = $status ? strtolower((string) $status->getState()) : '';
-        if (!$status || !in_array($state, array('open', 'closed'), true)) {
+        // A disabled status is not offered by the core status menu either
+        // (TicketStatusList::getStatuses() lists enabled ones only), so
+        // nothing moves into it; tickets already in it may move out.
+        if (!$status || !in_array($state, array('open', 'closed'), true) || !$status->isEnabled()) {
             return array(422, array('error' => 'invalid_status'));
         }
         $before = $ticket->getStatus();
@@ -624,7 +640,7 @@ final class BoardController
         $strings = BoardI18n::strings(self::language());
         $statuses = array();
         foreach (BoardQuery::statuses(1) as $s) {
-            $statuses[] = array('id' => $s['id'], 'name' => $s['name'], 'state' => $s['state']);
+            $statuses[] = array('id' => $s['id'], 'name' => $s['name'], 'state' => $s['state'], 'enabled' => $s['enabled']);
         }
         $actions = BoardActions::build(self::facts($ticket, $thisstaff), $statuses, $strings);
 

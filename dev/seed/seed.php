@@ -18,6 +18,8 @@
  *            A5 (Open)
  *
  *   A1 carries an internal note with a marker string that must never show up.
+ *   Statuses: Open, In Progress, Closed, plus "Parked" (disabled, no tickets).
+ *   Status list property "kuerzel" with values for Open, In Progress, Parked.
  *   Agents: the installer's admin (all departments), salesagent (Sales only,
  *   role "View only": may look, may not change status).
  *   Saved searches: "Acme tickets" (admin, private, by organisation) and
@@ -89,6 +91,38 @@ q("INSERT INTO " . TICKET_STATUS_TABLE . " (name, state, mode, flags, sort, prop
 $inProgress = (int) db_insert_id();
 $open = (int) scalar("SELECT id FROM " . TICKET_STATUS_TABLE . " WHERE name='Open'");
 $closed = (int) scalar("SELECT id FROM " . TICKET_STATUS_TABLE . " WHERE name='Closed'");
+
+// Disabled in the status list (Admin Panel, Lists, Ticket Status, Disable):
+// the ENABLED bit of `mode` is off. No ticket sits in it, so it must not
+// show up anywhere; 7-status-list.spec.js moves a ticket in by SQL. Sort 1,
+// so it sits between Open and In Progress and a keyboard move has to skip it.
+q("INSERT INTO " . TICKET_STATUS_TABLE . " (name, state, mode, flags, sort, properties, created, updated)
+   VALUES ('Parked', 'open', 0, 0, 1, '{\"description\":\"Disabled\"}', NOW(), NOW())");
+$parked = (int) db_insert_id();
+
+// A list property for the "Status abbreviations" setting, added the way
+// Admin Panel, Lists, Ticket Status, Properties adds one: a field of the
+// list's own form. Values are keyed by field ID, as the status edit form
+// stores them. Closed gets no value and keeps its name.
+$statusList = DynamicList::lookup(array('type' => 'ticket-status'));
+$propForm = $statusList ? DynamicForm::lookup(array('type' => 'L' . $statusList->getId())) : null;
+if (!$propForm) {
+    fail('ticket status property form');
+}
+$abbrevField = DynamicFormField::create(array(
+    'form_id' => $propForm->getId(), 'type' => 'text', 'label' => 'Kürzel', 'name' => 'kuerzel', 'sort' => 10,
+    'flags' => DynamicFormField::FLAG_ENABLED | DynamicFormField::FLAG_AGENT_VIEW | DynamicFormField::FLAG_AGENT_EDIT,
+    'configuration' => '{"size":"8","length":"12"}',
+));
+if (!$abbrevField->save()) {
+    fail('abbreviation property');
+}
+$abbrevFieldId = (int) $abbrevField->getId();
+foreach (array($open => 'OF', $inProgress => 'IB', $parked => 'PK') as $sid => $abbrev) {
+    $props = json_decode((string) scalar("SELECT properties FROM " . TICKET_STATUS_TABLE . " WHERE id=$sid"), true) ?: array();
+    $props[(string) $abbrevFieldId] = $abbrev;
+    q(sprintf("UPDATE %s SET properties=%s WHERE id=%d", TICKET_STATUS_TABLE, db_input(json_encode($props)), $sid));
+}
 
 // ------------------------------------------------------- orgs and users
 
@@ -276,7 +310,8 @@ if (is_file('/seed-local/seed.php')) {
 echo json_encode(array(
     'tickets' => $ids,
     'numbers' => array_map(fn($id) => Ticket::lookup($id)->getNumber(), $ids),
-    'status'  => array('open' => $open, 'in_progress' => $inProgress, 'closed' => $closed),
+    'status'  => array('open' => $open, 'in_progress' => $inProgress, 'closed' => $closed, 'parked' => $parked),
+    'abbrev_field' => $abbrevFieldId,
     'plugin'  => array('id' => $pid, 'instance' => $iid),
     'searches' => $searches,
 ), JSON_PRETTY_PRINT) . "\n";
