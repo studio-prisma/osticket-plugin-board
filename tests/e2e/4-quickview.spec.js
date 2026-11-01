@@ -25,17 +25,14 @@ async function act(page, button, number) {
   await expect(page.locator('.spb-panel-body')).toHaveAttribute('data-number', number);
 }
 
-// An open card without sub-tickets or open tasks that has another open card
-// after it. osTicket refuses to close a ticket with open tasks. G1 and X1 are
-// left alone: a close and reopen would reset the seeded due dates 6-extras
-// checks.
+// An open card without sub-tickets or open tasks (osTicket refuses to close a
+// ticket with open tasks) that has another open card after it.
 function closablePair(page) {
-  return page.evaluate((keep) => {
+  return page.evaluate(() => {
     const cards = [...document.querySelectorAll('.spb-col[data-state="open"] .spb-cards > .spb-card')];
-    const i = cards.findIndex((c, k) => !c.querySelector('.spb-children, .spb-tasks-badge')
-      && !keep.includes(c.dataset.number) && cards[k + 1]);
+    const i = cards.findIndex((c, k) => !c.querySelector('.spb-children, .spb-tasks-badge') && cards[k + 1]);
     return i < 0 ? null : { id: cards[i].dataset.ticketId, number: cards[i].dataset.number, next: cards[i + 1].dataset.number };
-  }, [n.G1, n.X1]);
+  });
 }
 
 function post(page, url, body, withToken = true) {
@@ -309,7 +306,6 @@ test.describe('admin', () => {
   test('tasks above the preview: open ones with due date and assignee, closed folded, link to the task', async ({ page }) => {
     const errors = watchErrors(page);
     await expect(page.locator(`.spb-card[data-number="${n.A1}"] .spb-tasks-badge`).first()).toHaveText('2 open tasks');
-    await expect(page.locator(`.spb-card[data-number="${n.S1}"] .spb-tasks-badge`)).toHaveText('2 open tasks');
     await openPanel(page, n.A1);
     const tasks = page.locator('.spb-panel-body .spb-tasks');
     await expect(tasks.locator('.spb-tasks-heading')).toHaveText('Tasks 2');
@@ -386,12 +382,20 @@ test.describe('view-only agent in Sales', () => {
   });
 
   test('tasks: only the ones the agent may open, and the badge counts the same', async ({ page }) => {
-    // T4 sits in Support, which this agent can't access; T5 is in Sales.
-    await expect(page.locator(`.spb-card[data-number="${n.S1}"] .spb-tasks-badge`)).toHaveText('1 open task');
-    await openPanel(page, n.S1);
-    const ids = await page.locator('.spb-panel-body .spb-task').evaluateAll((els) => els.map((e) => Number(e.dataset.taskId)));
-    expect(ids).toEqual([seed.tasks.T5]);
-    await expect(page.locator('.spb-panel-body')).not.toContainText('Support-only follow-up');
+    // T4 sits in Support, which this agent can't access while it is open;
+    // T5 is in Sales. Seeded closed so S1 stays closable for the admin specs.
+    const both = `${seed.tasks.T4}, ${seed.tasks.T5}`;
+    sql(`UPDATE ost_task SET flags = flags | 1, closed = NULL WHERE id IN (${both})`);
+    try {
+      await page.reload();
+      await expect(page.locator(`.spb-card[data-number="${n.S1}"] .spb-tasks-badge`)).toHaveText('1 open task');
+      await openPanel(page, n.S1);
+      const ids = await page.locator('.spb-panel-body .spb-task').evaluateAll((els) => els.map((e) => Number(e.dataset.taskId)));
+      expect(ids).toEqual([seed.tasks.T5]);
+      await expect(page.locator('.spb-panel-body')).not.toContainText('Support-only follow-up');
+    } finally {
+      sql(`UPDATE ost_task SET flags = flags & ~1, closed = NOW() WHERE id IN (${both})`);
+    }
   });
 
   test('actions the role does not allow are refused on the endpoint too', async ({ page }) => {

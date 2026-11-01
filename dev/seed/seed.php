@@ -19,8 +19,9 @@
  *
  *   A1 carries an internal note with a marker string that must never show up.
  *   Tasks: A1 has T1 (open, overdue, admin), T2 (open, unassigned) and T3
- *   (closed). S1 has T4 (open, Support: salesagent may not open it) and T5
- *   (open, Sales).
+ *   (closed). S1 has T4 (Support: salesagent may not open it while open) and
+ *   T5 (Sales), both closed, so S1 stays closable for the quick-view specs;
+ *   the salesagent spec opens them for its own run.
  *   Statuses: Open, In Progress, Closed, plus "Parked" (disabled, no tickets).
  *   Status list property "kuerzel" with values for Open, In Progress, Parked.
  *   Agents: the installer's admin (all departments), salesagent (Sales only,
@@ -292,7 +293,8 @@ task('T3', 'A1', 'Set up access', $support, $adminId);
 task('T4', 'S1', 'Support-only follow-up', $support);
 task('T5', 'S1', 'Sales quote', $sales);
 q(sprintf("UPDATE %s SET duedate=NOW() - INTERVAL 1 DAY WHERE id=%d", TASK_TABLE, $tasks['T1']));
-q(sprintf("UPDATE %s SET flags=flags & ~%d, closed=NOW() WHERE id=%d", TASK_TABLE, TaskModel::ISOPEN, $tasks['T3']));
+q(sprintf("UPDATE %s SET flags=flags & ~%d, closed=NOW() WHERE id IN (%d, %d, %d)", TASK_TABLE, TaskModel::ISOPEN,
+    $tasks['T3'], $tasks['T4'], $tasks['T5']));
 $thisstaff = null;
 
 // -------------------------------------------------------- saved searches
