@@ -46,7 +46,7 @@ require_once __DIR__ . '/src/BoardLanding.php';
 class BoardPlugin extends Plugin
 {
     /** Mirrors plugin.php; used for cache-busting the asset URLs only. */
-    public const VERSION = '0.3.3';
+    public const VERSION = '0.4.0';
 
     /** Route bases, relative to ROOT_PATH. */
     public const STAFF_BASE = 'scp/ajax.php/board';
@@ -87,6 +87,7 @@ class BoardPlugin extends Plugin
             'next_to_statuses'   => $config->get('next_to_statuses'),
             'next_from_statuses' => $config->get('next_from_statuses'),
             'next_from_actions'  => $config->get('next_from_actions'),
+            'status_abbrev_var'  => $config->get('status_abbrev_var'),
         ));
         $s = BoardController::settings();
 

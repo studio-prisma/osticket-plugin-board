@@ -27,7 +27,7 @@ final class BoardActions
      *                  answered, can_close, can_assign, can_claim, can_release,
      *                  can_transfer, can_refer, can_mark_answered, can_edit,
      *                  priority_field_id, can_create_task, status_id
-     * @param array $statuses  [id, name, state] for open and closed states
+     * @param array $statuses  [id, name, state, enabled?] for open and closed states
      * @param array $t  BoardI18n strings
      * @return array<int, array<string, mixed>>
      */
@@ -44,6 +44,10 @@ final class BoardActions
                     continue;
                 }
                 if (!in_array($s['state'], array('open', 'closed'), true)) {
+                    continue;
+                }
+                // Disabled in the status list: the core menu leaves it out.
+                if (array_key_exists('enabled', $s) && !$s['enabled']) {
                     continue;
                 }
                 if ($s['state'] === 'closed' && empty($f['closeable'])) {

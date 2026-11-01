@@ -24,6 +24,7 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 | Sortierung | Zuletzt geändert, Fälligkeit, Priorität, neueste, Nummer; pro Sitzung gemerkt | Nein |
 | Gruppierung | Zeilen pro Organisation, zuständiger Person (oder Team) oder Abteilung, Spaltenköpfe mit Summen oben | Nein |
 | Spaltenlimits | Optional pro Status; eine Spalte über ihrem Limit wird markiert | Nein |
+| Spaltenköpfe | Statusname oder ein Kürzel aus einer Eigenschaft der Statusliste (Einstellung), voller Name als Tooltip | Statusname |
 | Live-Aktualisierung | Änderungen von anderswo erscheinen von selbst, solange du nichts tust, oder hinter einem Button „Aktualisierungen anzeigen", während du arbeitest | Nein |
 | Pro Karte | Nummer, Betreff, Anfragende Person, Abteilung, Zuweisung, letzte Änderung, Überfällig-Markierung | Nummer, Betreff, Abteilung, letzte Änderung |
 | Unter-Tickets | Eingeklappte Liste unter dem Eltern-Ticket, jeweils mit eigenem Status | Ebenso, beschränkt auf Unter-Tickets, die der Kunde sehen darf |
@@ -71,6 +72,7 @@ Kurzfassung:
 | Client navigation link | an | „Board" in der Portal-Navigation. Aus: nur per URL erreichbar |
 | Closed tickets, days | 14 | In der Standardansicht zeigen geschlossene Spalten Tickets, die in diesem Zeitraum geschlossen wurden. `0` blendet sie aus. Ist eine Queue oder Suche gewählt, entscheiden deren Kriterien |
 | Column limits | leer | Statusname und Limit, z. B. `In Progress=5; Open=20`. Wird nur markiert, nichts wird blockiert |
+| Status abbreviations | leer | Variablenname einer Eigenschaft der Liste Ticket Status (Admin-Panel → Verwalten → Listen → Ticket Status → Eigenschaften), z. B. `kuerzel`. Die Spaltenköpfe des Agenten-Boards zeigen den Wert dieser Eigenschaft, der volle Name bleibt Tooltip und das, was Screenreader vorlesen. Status ohne Wert behalten ihren Namen. Leer: aus. Das Kunden-Board zeigt immer die vollen Namen |
 | Next ticket after closing | An | Nach dem Schließen aus der Schnellansicht öffnet das Panel die nächste offene Karte. Aus: Es bleibt beim geschlossenen Ticket |
 | Next ticket after changing to | keine | Offene Status, die in der Schnellansicht gewählt ebenfalls zur nächsten offenen Karte springen, egal woher das Ticket kommt |
 | Next ticket from these columns | keine | Abarbeitungs-Spalten, z. B. ein Triage-Status. Eine Aktion an einem Ticket darin öffnet die nächste Karte derselben Spalte; ist die Spalte leer, schließt sich die Schnellansicht. Hat Vorrang vor den beiden Einstellungen darüber |
@@ -84,7 +86,7 @@ Farben und Radien sind CSS-Variablen auf `.spb-wrap`. Überschreiben im eigenen 
 .spb-wrap { --spb-accent: #330066; --spb-radius: 8px; }
 ```
 
-Alle Variablen stehen oben in [assets/board.css](assets/board.css).
+Alle Variablen stehen oben in [assets/board.css](assets/board.css). Ein dunkles Theme setzt auch die Flächen: `--spb-drawer-bg`, `--spb-drawer-solid`, `--spb-card-bg`, `--spb-col-bg`, `--spb-fill`, und `--spb-accent-fill`, wenn der Akzent zu hell für weiße Schrift ist.
 
 Das Board folgt den Systemeinstellungen für reduzierte Bewegung (die Schnellansicht blendet über, statt zu gleiten), reduzierte Transparenz (deckendes Panel) und erhöhten Kontrast.
 
@@ -121,6 +123,7 @@ Nicht geprüft: osTicket 1.17, Nginx, MySQL statt MariaDB, andere Portal-Themes 
 - **Die Live-Aktualisierung lädt das ganze Board im Hintergrund neu**, wenn sich etwas geändert hat, und pausiert in Hintergrund-Tabs. Bei vielen Agenten und kurzen Intervallen ist das ein zusätzlicher Seitenaufbau pro Agent und Änderung; 60 Sekunden sind nicht ohne Grund der Standard.
 - **Ziehen ändert nur den Status.** Zuweisung, Priorität und der Rest laufen über die Schnellansicht. Die Reihenfolge der Karten innerhalb einer Spalte wird nicht gespeichert.
 - **Kinder ziehen nicht mit.** Eine Eltern-Karte zu verschieben ändert nur das Eltern-Ticket. Unter-Tickets behalten ihren Status.
+- **Deaktivierte Status** (Admin-Panel → Listen → Ticket Status → Deaktivieren) bekommen keine Spalte und stehen weder in der Schnellansicht noch in den Status-Auswahlen der Einstellungen, wie in osTickets eigenem Statusmenü. Solange noch Tickets darin stehen, bleibt ihre Spalte, markiert, damit sie nicht vom Board verschwinden: Karten lassen sich heraus-, aber nicht hineinschieben. Auch „Rückgängig" im Hinweis kann ein Ticket nicht in einen deaktivierten Status zurücksetzen.
 - **Eine Ebene sichtbar.** Tiefere Hierarchien werden unter dem obersten sichtbaren Vorfahren zusammengefasst.
 - **Der Navigationseintrag hängt am Portal-Markup.** Er kommt hinter den letzten Eintrag von `<ul id="nav">`. Ein Theme, das das Header-Template ohne diese Liste ersetzt, bekommt keinen Link. Das Board bleibt unter `/ajax.php/board` erreichbar.
 - **Gast-Sitzungen** (Zugangslinks zu einem Ticket) bekommen kein Board. Sie sind an ein einzelnes Ticket gebunden.

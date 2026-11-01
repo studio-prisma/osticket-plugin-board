@@ -408,6 +408,91 @@ check('next rules: board carries them for the quick view', strpos(BoardRenderer:
     'data-next="{&quot;to&quot;:[6],&quot;from&quot;:[5],&quot;acts&quot;:[&quot;status&quot;,&quot;assign&quot;]}"') !== false);
 check('clamp: column limits text capped', strlen(BoardController::normalise(array('wip_limits' => str_repeat('a', 900)))['wip_limits']) === 500);
 
+// ------------------------------------- status list: disabled, abbreviations
+
+$withDisabled = array_merge($statuses, array(
+    array('id' => 8, 'name' => 'Parked', 'state' => 'open', 'sort' => 3, 'enabled' => false),
+    array('id' => 9, 'name' => 'Retired', 'state' => 'closed', 'sort' => 2, 'enabled' => false),
+));
+$colIds = fn($board) => array_column(array_column($board['columns'], 'status'), 'id');
+check('disabled: no column without tickets', $colIds(BoardModel::build($withDisabled, array(row(1, 1)))) === array(1, 2, 3));
+$b = BoardModel::build($withDisabled, array(row(1, 1), row(2, 8)));
+check('disabled: column kept while a ticket sits in it, marked', $colIds($b) === array(1, 2, 8, 3)
+    && $b['columns'][2]['status']['enabled'] === false && $b['columns'][2]['cards'][0]['id'] === 2 && $b['count'] === 2);
+$b = BoardModel::build($withDisabled, array(row(1, 1), row(2, 9, 1)));
+check('disabled: a sub-ticket in it keeps its badge, adds no column', $colIds($b) === array(1, 2, 3)
+    && $b['columns'][0]['cards'][0]['children'][0]['status_name'] === 'Retired');
+check('disabled: statuses without the key count as enabled', BoardModel::build($statuses, array())['columns'][0]['status']['enabled'] === true);
+
+$pb = BoardModel::build($withDisabled, array(row(1, 1), row(2, 8)));
+$disabledStaff = BoardRenderer::render($pb, $pickerCtx);
+check('disabled: agent column marked, not a drop target, with a note',
+    preg_match('#<section class="spb-col spb-state-open" data-status-id="8" data-status-name="Parked" data-state="open" data-disabled="1">#', $disabledStaff) === 1
+    && substr_count($disabledStaff, 'data-disabled="1"') === 1
+    && strpos($disabledStaff, '<p class="spb-col-note spb-disabled-note">' . $strings['status_disabled'] . '</p>') !== false);
+$disabledClient = BoardRenderer::render($pb, array('mode' => 'client', 'ticket_url' => '/t?id=', 'strings' => $strings,
+    'closed_days' => 14, 'max_cards' => 300, 'truncated' => false));
+check('disabled: client sees the column and card, without the admin note', strpos($disabledClient, 'data-status-id="8"') !== false
+    && strpos($disabledClient, 'data-disabled') === false && strpos($disabledClient, $strings['status_disabled']) === false);
+$pl = BoardModel::lanes($pb, 'dept', '-');
+$disabledLanes = BoardRenderer::render($pb, array_merge($pickerCtx, array('lanes' => $pl, 'group' => 'dept')));
+check('disabled: lane cells marked too', substr_count($disabledLanes, 'data-disabled="1"') === count($pl)
+    && substr_count($disabledLanes, 'spb-disabled-note') === 1);
+
+$statusListDisabled = array_merge($statusList, array(array('id' => 8, 'name' => 'Parked', 'state' => 'open', 'enabled' => false),
+    array('id' => 9, 'name' => 'Retired', 'state' => 'closed', 'enabled' => false),
+    array('id' => 10, 'name' => 'Waiting', 'state' => 'open', 'enabled' => true)));
+$offered = array_column(BoardActions::build($all, $statusListDisabled, $strings), 'value', 'label');
+check('disabled: never offered as a quick-view status', !isset($offered['Parked']) && !isset($offered['Retired'])
+    && isset($offered['Waiting']) && isset($offered['In Progress']));
+check('disabled: a ticket in a disabled status can move out', ($offered = array_column(BoardActions::build(
+    array_merge($all, array('status_id' => 8)), $statusListDisabled, $strings), 'label')) && in_array('Open', $offered, true)
+    && !in_array('Parked', $offered, true));
+
+// Properties as TicketStatus::setConfiguration() stores them: by field ID;
+// the installer's own data is keyed by variable name.
+check('abbrev: by field id, JSON or array', BoardModel::abbrevFrom('{"35":"Open tickets.","41":"TR"}', 41, 'kuerzel') === 'TR'
+    && BoardModel::abbrevFrom(array('41' => ' WV '), 41, 'kuerzel') === 'WV');
+check('abbrev: by variable name as fallback', BoardModel::abbrevFrom('{"kuerzel":"OF"}', 41, 'kuerzel') === 'OF'
+    && BoardModel::abbrevFrom('{"41":"","kuerzel":"OF"}', 41, 'kuerzel') === 'OF');
+check('abbrev: none, empty, junk give nothing', BoardModel::abbrevFrom(null, 41, 'kuerzel') === ''
+    && BoardModel::abbrevFrom('', 41, 'kuerzel') === '' && BoardModel::abbrevFrom('not json', 41, 'kuerzel') === ''
+    && BoardModel::abbrevFrom('{"41":"   "}', 41, 'kuerzel') === '' && BoardModel::abbrevFrom('{"42":"TR"}', 41, 'kuerzel') === ''
+    && BoardModel::abbrevFrom('{"41":{"1":"Choice"}}', 41, 'kuerzel') === ''
+    && BoardModel::abbrevFrom('{"41":true}', 41, 'kuerzel') === '');
+check('abbrev: multi-line or too long gives nothing, umlauts count as one', BoardModel::abbrevFrom('{"41":"A\nB"}', 41, 'k') === ''
+    && BoardModel::abbrevFrom(array('41' => str_repeat('x', BoardModel::ABBREV_MAX + 1)), 41, 'k') === ''
+    && BoardModel::abbrevFrom(array('41' => str_repeat('ü', BoardModel::ABBREV_MAX)), 41, 'k') === str_repeat('ü', BoardModel::ABBREV_MAX)
+    && BoardModel::abbrevFrom(array('41' => "ok \xC3\x28"), 41, 'k') === '');
+
+$abbrevStatuses = array(
+    array('id' => 1, 'name' => 'Open', 'state' => 'open', 'sort' => 1, 'abbrev' => 'OF'),
+    array('id' => 2, 'name' => 'In <progress> "x"', 'state' => 'open', 'sort' => 2, 'abbrev' => '<b>'),
+    array('id' => 3, 'name' => 'Closed', 'state' => 'closed', 'sort' => 1, 'abbrev' => ''),
+);
+$ab = BoardModel::build($abbrevStatuses, array(row(1, 1)));
+$abStaff = BoardRenderer::render($ab, $pickerCtx);
+check('abbrev: agent head shows it, full name as tooltip and for screen readers', strpos($abStaff,
+    '<h3 class="spb-abbreviated" title="Open"><span class="spb-abbrev" aria-hidden="true">OF</span><span class="spb-sr">Open</span></h3>') !== false);
+check('abbrev: escaped in head, tooltip and screen-reader text', strpos($abStaff, '<b>') === false
+    && strpos($abStaff, 'title="In &lt;progress&gt; &quot;x&quot;"><span class="spb-abbrev" aria-hidden="true">&lt;b&gt;</span><span class="spb-sr">In &lt;progress&gt; &quot;x&quot;</span>') !== false);
+check('abbrev: a status without a value keeps its name', strpos($abStaff, '<h3>Closed</h3>') !== false);
+check('abbrev: column keeps the full name for moves and toasts', strpos($abStaff, 'data-status-id="1" data-status-name="Open"') !== false);
+$abClient = BoardRenderer::render($ab, array('mode' => 'client', 'ticket_url' => '/t?id=', 'strings' => $strings,
+    'closed_days' => 14, 'max_cards' => 300, 'truncated' => false));
+check('abbrev: never on the client board', strpos($abClient, 'spb-abbrev') === false && strpos($abClient, '<h3>Open</h3>') !== false);
+$abLanes = BoardRenderer::render($ab, array_merge($pickerCtx, array('lanes' => BoardModel::lanes($ab, 'dept', '-'), 'group' => 'dept')));
+check('abbrev: shared head row of a grouped board too', substr_count($abLanes, 'class="spb-abbreviated"') === 2);
+check('abbrev: without the setting the head is unchanged', strpos(BoardRenderer::render(BoardModel::build($statuses, array()), $pickerCtx),
+    '<header class="spb-col-head"><h3>Open</h3><span class="spb-count">0</span></header>') !== false);
+
+check('setting: status abbreviations off by default', BoardController::normalise(array())['status_abbrev'] === '');
+check('setting: variable name lower-cased and trimmed', BoardController::normalise(array('status_abbrev_var' => ' Kuerzel '))['status_abbrev'] === 'kuerzel');
+check('setting: anything but a variable name switches it off', BoardController::variableName('kü') === ''
+    && BoardController::variableName('a b') === '' && BoardController::variableName("x'--") === ''
+    && BoardController::variableName(array('x')) === '' && BoardController::variableName(null) === ''
+    && BoardController::variableName(str_repeat('a', 65)) === '' && BoardController::variableName('abbrev_2') === 'abbrev_2');
+
 // -------------------------------------------------------- output buffering
 
 $web = array('/tickets.php', '/apps/dispatcher.php', '/support/view.php', '/kb/index.php');

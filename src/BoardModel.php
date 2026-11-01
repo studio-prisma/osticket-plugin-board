@@ -15,7 +15,13 @@ declare(strict_types=1);
 final class BoardModel
 {
     /**
-     * @param array<int, array{id:int|string, name:string, state:string, sort?:int|string}> $statuses
+     * A status that is disabled in the status list (Admin Panel, Lists,
+     * Ticket Status) keeps its column only while tickets of the view still
+     * sit in it as cards, so they don't silently drop off the board. Without
+     * cards it gets no column.
+     *
+     * @param array<int, array{id:int|string, name:string, state:string, sort?:int|string,
+     *        enabled?:bool, abbrev?:string}> $statuses  enabled defaults to true
      * @param array<int, array<string, mixed>> $rows  keys: id, number, pid, status_id,
      *        subject, updated, dept, assignee, user, overdue
      * @param string $sort  one of self::SORTS; unknown values sort by update
@@ -28,9 +34,11 @@ final class BoardModel
             $id = (int) $s['id'];
             $columns[$id] = array(
                 'status' => array(
-                    'id'    => $id,
-                    'name'  => (string) $s['name'],
-                    'state' => (string) $s['state'],
+                    'id'      => $id,
+                    'name'    => (string) $s['name'],
+                    'state'   => (string) $s['state'],
+                    'enabled' => !array_key_exists('enabled', $s) || (bool) $s['enabled'],
+                    'abbrev'  => (string) ($s['abbrev'] ?? ''),
                 ),
                 'cards'  => array(),
             );
@@ -80,7 +88,48 @@ final class BoardModel
         }
         unset($col);
 
+        // Dropped only now: a sub-ticket nested under a card elsewhere still
+        // needed its disabled status for the badge above.
+        $columns = array_filter($columns, static function ($col) {
+            return $col['status']['enabled'] || $col['cards'];
+        });
+
         return array('columns' => array_values($columns), 'count' => count($byId));
+    }
+
+    /** Longest abbreviation a column head shows, in characters. */
+    public const ABBREV_MAX = 12;
+
+    /**
+     * The value of one list property of a status, for the column head.
+     * $properties is the status's `properties` column: JSON keyed by the
+     * property field's ID, as TicketStatus::setConfiguration() stores it.
+     * Older data keyed by the field's variable name is read too, the same
+     * fallback TicketStatus::getConfiguration() has. Anything that isn't a
+     * short single line of text gives ''.
+     *
+     * @param array|string|null $properties
+     */
+    public static function abbrevFrom($properties, int $fieldId, string $name): string
+    {
+        if (is_string($properties)) {
+            $properties = json_decode($properties, true);
+        }
+        if (!is_array($properties)) {
+            return '';
+        }
+        $value = $properties[(string) $fieldId] ?? null;
+        if (($value === null || $value === '') && $name !== '') {
+            $value = $properties[$name] ?? null;
+        }
+        if (!is_string($value) && !is_int($value)) {
+            return '';
+        }
+        $value = trim((string) $value);
+        if ($value === '' || !preg_match('//u', $value) || preg_match('/[\x00-\x1F\x7F]/', $value)) {
+            return '';
+        }
+        return preg_match_all('/./su', $value) <= self::ABBREV_MAX ? $value : '';
     }
 
     /** Sort modes for cards within a column. The first is the default. */

@@ -8,10 +8,10 @@ php tests/unit.php
 
 | Area | What is checked |
 |---|---|
-| `BoardModel` | column order, nesting by `ticket_pid`, orphans when the parent is invisible, grandchildren, cycles in bad data, archived/deleted states, card order |
+| `BoardModel` | column order, nesting by `ticket_pid`, orphans when the parent is invisible, grandchildren, cycles in bad data, archived/deleted states, disabled statuses (column only while it holds cards), status abbreviations read from list properties, card order |
 | `BoardRenderer` | escaping of every ticket field, staff vs. client fields, links, drag attributes, truncation notice |
 | `NavInjector` | placement, idempotence, pages without the portal nav, escaping |
-| Settings | defaults (client board off), clamps for days and card limit |
+| Settings | defaults (client board off, abbreviations off), clamps for days and card limit, the abbreviation variable name |
 | Output buffer | which scripts get one, never under the CLI |
 
 `stubs/` holds empty stand-ins for the osTicket classes the plugin file extends. `PLUGIN_DIR` overrides the plugin location, default is the repository root.
@@ -35,6 +35,7 @@ Runs against the stack from `dev/up.sh`, see [dev/README.md](../dev/README.md). 
 | `3-theme.spec.js` | Runs only with `dev/local/compose.override.yml`: board inside the themed chrome, columns side by side, screenshots desktop and mobile |
 | `4-quickview.spec.js` | Quick view opens from a card and closes with Escape, markup in subjects stays text, summary and thread on one page with older entries opening and folding on click, sub-tickets listed under the thread with a subject opening that sub-ticket, assign, transfer and priority from the panel pickers without a core dialog, status in one click with the note saved alongside and undo from the toast, closing moves on to the next open card unless the setting is off, a work-through column moves on within the column for status changes and, once selected, other actions, a status in "Next ticket after changing to" moves on across the board, refer still opens the core dialog, `/board/act` refuses missing CSRF, unknown actions and values the pickers wouldn't offer, internal note stored as text and absent from the portal, note endpoint refuses missing CSRF, empty text, unknown tickets; view-only agent gets no forbidden action buttons, 403 on actions the role doesn't allow and the same 404 for invisible and missing tickets; a client session gets 403 on panel, note and actions |
 | `6-extras.spec.js` | Due and priority tags (agent only), sort by priority and due date with memory, swimlanes by organisation with row-bound moves and shared totals, grouping by agent and department, column limit marking, live refresh in two sessions (swapped in when idle, offered when busy, quick view still works after a swap), state endpoint headers and fingerprint change |
+| `7-status-list.spec.js` | A disabled status has no column, no quick-view button, no entry in the settings' status pickers, and the move endpoint refuses it; with a ticket in it the column stays, marked, is no drop target, the keyboard move skips it, the card moves out and the column goes; same in the grouped view; the client still sees that ticket. Status abbreviations: off by default; on, agent heads show the property value with the full name as tooltip and accessible name, statuses without a value keep their name, the grouped head row too, the client board keeps full names, an unknown or invalid variable name changes nothing |
 | `5-visual.spec.js` | Visual walkthrough with screenshots in `dev/local/screens/`: agent board, hover, sub-tickets, quick view, toast after a move, drop target while dragging, filtered view, phone width for both boards. Checks layout rules a screenshot hides: no sideways page scroll, columns side by side or stacked by width, cards inside their column, quick view inside the viewport, toast goes away |
 
 The close test writes `dev/local/mail-check.json`: how many mails Mailpit received for the requester before and after the status change. It records the behaviour; it doesn't assert it, because that depends on osTicket's alert settings, not on the plugin.

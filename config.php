@@ -108,6 +108,22 @@ class BoardConfig extends PluginConfig
                 'configuration' => array('multiselect' => true, 'prompt' => 'Status change only'),
             )),
 
+            'sec_heads' => new SectionBreakField(array(
+                'label' => 'Column heads',
+            )),
+
+            'status_abbrev_var' => new TextboxField(array(
+                'label'         => 'Status abbreviations',
+                'default'       => '',
+                'hint'          => 'Optional. Variable name of a property of the Ticket Status list '
+                                 . '(Admin Panel, Manage, Lists, Ticket Status, Properties), e.g. '
+                                 . '"abbrev". Agent board column heads then show that property\'s '
+                                 . 'value instead of the status name, with the full name as tooltip. '
+                                 . 'Statuses without a value keep their name. Empty: off. The client '
+                                 . 'board always shows full names.',
+                'configuration' => array('size' => 20, 'length' => 64),
+            )),
+
             'sec_limits' => new SectionBreakField(array(
                 'label' => 'Limits',
             )),
@@ -148,9 +164,11 @@ class BoardConfig extends PluginConfig
     }
 
     /**
-     * Open statuses for the pickers, id => name. Plain SQL on purpose: the
-     * config is built during plugin bootstrap, before osTicket has loaded
-     * what TicketStatus::getLocalName() needs.
+     * Open, enabled statuses for the pickers, id => name. Plain SQL on
+     * purpose: the config is built during plugin bootstrap, before osTicket
+     * has loaded what TicketStatus::getLocalName() needs. "Enabled" is bit 1
+     * of the `mode` column (TicketStatus::ENABLED), the bit isEnabled() and
+     * the core status menus check.
      */
     private static function openStatuses(): array
     {
@@ -159,7 +177,7 @@ class BoardConfig extends PluginConfig
             return $out;
         }
         $res = db_query("SELECT id, name FROM " . TICKET_STATUS_TABLE
-            . " WHERE state = 'open' ORDER BY sort, name");
+            . " WHERE state = 'open' AND (mode & 1) = 1 ORDER BY sort, name");
         while ($res && ($row = db_fetch_array($res))) {
             $out[(string) (int) $row['id']] = (string) $row['name'];
         }

@@ -25,6 +25,16 @@
   --spb-closed: #8e8e93;
   --spb-overdue: #d70015;
   --spb-ok: #248a3d;
+  --spb-soon: #a52a00;
+  /* Filled accent with white text; a dark theme with a light accent sets
+     a darker fill here. */
+  --spb-accent-fill: var(--spb-accent);
+  /* Neutral fill for small controls (count, close button) and its hover. */
+  --spb-fill: rgba(0, 0, 0, 0.06);
+  --spb-fill-strong: rgba(0, 0, 0, 0.1);
+  /* Quick view surface, and the opaque one for reduced transparency. */
+  --spb-drawer-bg: rgba(255, 255, 255, 0.86);
+  --spb-drawer-solid: #ffffff;
   --spb-radius: 10px;
   /* Columns share the width, never narrower than min, never wider than max.
      Only when min does not fit does the board scroll sideways. */
@@ -211,7 +221,7 @@
   min-width: 20px;
   padding: 1px 7px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--spb-fill);
   color: var(--spb-muted);
   font-size: 12px;
   font-weight: 500;
@@ -222,6 +232,35 @@
   margin: 0 12px;
   font-size: 11px;
   color: var(--spb-faint);
+}
+
+/* Abbreviated column head (setting "Status abbreviations"): the short form
+   is shown, the full name is the tooltip and the text screen readers get. */
+.spb-abbreviated {
+  cursor: help;
+}
+
+.spb-abbrev {
+  letter-spacing: 0.04em;
+}
+
+.spb-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A status disabled in the status list, shown only while it holds cards. */
+.spb-col[data-disabled] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--spb-border);
 }
 
 .spb-cards {
@@ -439,7 +478,7 @@
   width: min(680px, 100vw);
   box-sizing: border-box;
   z-index: 8;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--spb-drawer-bg);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   backdrop-filter: blur(24px) saturate(180%);
   box-shadow: -1px 0 0 rgba(0, 0, 0, 0.08), -16px 0 48px rgba(0, 0, 0, 0.12);
@@ -473,7 +512,7 @@
   height: 30px;
   border: 0;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--spb-fill);
   color: var(--spb-muted);
   font-size: 20px;
   line-height: 30px;
@@ -482,7 +521,7 @@
 }
 
 .spb-drawer-close:hover {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--spb-fill-strong);
   color: var(--spb-text);
 }
 
@@ -517,7 +556,7 @@
   padding: 14px 16px;
   margin: 0 0 18px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.035);
+  background: var(--spb-col-bg);
 }
 
 .spb-action-group h3 {
@@ -752,7 +791,7 @@
   padding: 7px 16px;
   border: 0;
   border-radius: 999px;
-  background: var(--spb-accent);
+  background: var(--spb-accent-fill);
   color: #fff;
   font: inherit;
   font-size: 13px;
@@ -798,8 +837,8 @@
 
 .spb-due-today,
 .spb-due-tomorrow {
-  background: color-mix(in srgb, #c93400 12%, transparent);
-  color: #a52a00;
+  background: color-mix(in srgb, var(--spb-soon) 12%, transparent);
+  color: var(--spb-soon);
 }
 
 .spb-prio::before {
@@ -907,7 +946,7 @@
   padding: 7px 16px;
   border: 0;
   border-radius: 999px;
-  background: var(--spb-accent);
+  background: var(--spb-accent-fill);
   color: #fff;
   font: inherit;
   font-size: 13px;
@@ -997,7 +1036,7 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .spb-drawer {
-    background: #fff;
+    background: var(--spb-drawer-solid);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }

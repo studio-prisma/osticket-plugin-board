@@ -24,6 +24,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Sort | Last updated, due date, priority, newest, number; remembered per session | No |
 | Group | Rows per organisation, assignee (or team) or department, column heads with totals on top | No |
 | Column limits | Optional per status; a column over its limit is marked | No |
+| Column heads | Status name, or a short form from a status list property (setting), full name as tooltip | Status name |
 | Live refresh | Changes made elsewhere appear by themselves while you're idle, or behind a "Show updates" button while you're working | No |
 | Shown per card | Number, subject, requester, department, assignee, last update, overdue flag | Number, subject, department, last update |
 | Sub-tickets | Folded list under the parent, each with its own status | Same, limited to sub-tickets the client may see |
@@ -71,6 +72,7 @@ Short version:
 | Client navigation link | on | "Board" in the portal navigation. Off: reachable by URL only |
 | Closed tickets, days | 14 | In the default view, closed columns show tickets closed within this window. `0` hides closed columns. With a queue or search selected, its criteria decide instead |
 | Column limits | empty | Status name and limit, e.g. `In Progress=5; Open=20`. Marked only, nothing is blocked |
+| Status abbreviations | empty | Variable name of a property of the Ticket Status list (Admin Panel → Manage → Lists → Ticket Status → Properties), e.g. `abbrev`. Agent board column heads show the status's value for it, the full name stays the tooltip and what screen readers announce. Statuses without a value keep their name. Empty: off. The client board always shows full names |
 | Next ticket after closing | On | After closing a ticket from the quick view, the panel opens the next open card. Off: it stays on the closed ticket |
 | Next ticket after changing to | none | Open statuses that, picked in the quick view, also move on to the next open card, wherever the ticket came from |
 | Next ticket from these columns | none | Work-through columns, e.g. a triage status. An action on a ticket in one of them opens the next card of the same column; when the column is empty, the quick view closes. Takes precedence over the two settings above |
@@ -84,7 +86,7 @@ Colours and radii are CSS custom properties on `.spb-wrap`. Override them from y
 .spb-wrap { --spb-accent: #330066; --spb-radius: 8px; }
 ```
 
-All properties: top of [assets/board.css](assets/board.css).
+All properties: top of [assets/board.css](assets/board.css). A dark theme sets the surfaces too: `--spb-drawer-bg`, `--spb-drawer-solid`, `--spb-card-bg`, `--spb-col-bg`, `--spb-fill`, and `--spb-accent-fill` when the accent is too light to carry white text.
 
 The board follows the system settings for reduced motion (the quick view fades instead of sliding), reduced transparency (solid panel) and increased contrast.
 
@@ -121,6 +123,7 @@ Not verified: osTicket 1.17, Nginx, MySQL instead of MariaDB, other portal theme
 - **Live refresh reloads the whole board** in the background when something changed, and it pauses in background tabs. With many agents and short intervals that's one extra page render per agent per change; 60 seconds is the default for a reason.
 - **Dragging changes the status only.** Assignment, priority and the rest go through the quick view. The order of cards within a column isn't stored.
 - **Children don't follow.** Moving a parent card changes the parent only. Sub-tickets keep their status.
+- **Disabled statuses** (Admin Panel → Lists → Ticket Status → Disable) get no column and aren't offered in the quick view or the settings' status pickers, as in osTicket's own status menu. While tickets still sit in one, its column stays, marked, so they don't drop off the board: cards can be moved out of it, not into it. Undo from the toast can't move a ticket back into a disabled status either.
 - **One level shown.** Deeper hierarchies are flattened under the top-most visible ancestor.
 - **Navigation entry depends on the portal markup.** It's placed after the last item of `<ul id="nav">`. A theme that replaces the header template without that list gets no link; the board stays reachable at `/ajax.php/board`.
 - **Guest sessions** (ticket access links) don't get a board. They're bound to one ticket.

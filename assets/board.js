@@ -147,8 +147,13 @@
       });
     }
 
+    // Disabled in the status list: shown while it holds cards, never a target.
+    function isDisabled(col) {
+      return col.dataset.disabled === '1';
+    }
+
     function move(card, col) {
-      if (busy || !card || !col || !sameRow(card, col)) return;
+      if (busy || !card || !col || !sameRow(card, col) || isDisabled(col)) return;
       if (card.closest('.spb-col') === col) return;
 
       var number = card.dataset.number;
@@ -212,7 +217,7 @@
 
     wrap.addEventListener('dragover', function (e) {
       var col = e.target.closest && e.target.closest('.spb-col');
-      if (!col || !dragged || !sameRow(dragged, col)) return;
+      if (!col || !dragged || !sameRow(dragged, col) || isDisabled(col)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       if (!col.classList.contains('spb-dropping')) {
@@ -235,7 +240,11 @@
       var card = e.target.closest && e.target.closest('.spb-card[draggable="true"]');
       if (!card) return;
       var cols = columnsFor(card);
-      var target = cols[cols.indexOf(card.closest('.spb-col')) + (e.key === 'ArrowRight' ? 1 : -1)];
+      var step = e.key === 'ArrowRight' ? 1 : -1;
+      var i = cols.indexOf(card.closest('.spb-col')) + step;
+      // A disabled status's column is passed over, as in the core menu.
+      while (cols[i] && isDisabled(cols[i])) i += step;
+      var target = cols[i];
       if (!target) return;
       e.preventDefault();
       move(card, target);
