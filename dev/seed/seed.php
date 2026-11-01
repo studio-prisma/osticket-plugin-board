@@ -18,6 +18,9 @@
  *            A5 (Open)
  *
  *   A1 carries an internal note with a marker string that must never show up.
+ *   Tasks: A1 has T1 (open, overdue, admin), T2 (open, unassigned) and T3
+ *   (closed). S1 has T4 (open, Support: salesagent may not open it) and T5
+ *   (open, Sales).
  *   Statuses: Open, In Progress, Closed, plus "Parked" (disabled, no tickets).
  *   Status list property "kuerzel" with values for Open, In Progress, Parked.
  *   Agents: the installer's admin (all departments), salesagent (Sales only,
@@ -259,6 +262,39 @@ if (!$agent->save()) {
 $agent->setPassword($agentPass);
 $agent->save();
 
+// ----------------------------------------------------------------- tasks
+
+// Created through Task::create() as the admin, like the core "Add task"
+// dialog. Overdue and closed are set afterwards: the core form refuses a
+// past due date, and closing goes through a dialog.
+$tasks = array();
+function task(string $key, string $ticket, string $title, int $dept, int $staffId = 0): int
+{
+    global $ids, $tasks, $thisstaff;
+    $t = Task::create(array(
+        'object_id'         => $ids[$ticket],
+        'object_type'       => ObjectModel::OBJECT_TYPE_TICKET,
+        'description'       => "Seed task $key.",
+        'default_formdata'  => array('title' => $title),
+        'internal_formdata' => array('dept_id' => $dept, 'assignee' => $staffId ? Staff::lookup($staffId) : null),
+    ));
+    if (!$t) {
+        fail("task $key");
+    }
+    $tasks[$key] = (int) $t->getId();
+    return $tasks[$key];
+}
+
+$thisstaff = Staff::lookup($adminId);
+task('T1', 'A1', 'Check the offer <b>draft</b>', $support, $adminId);
+task('T2', 'A1', 'Call the customer back', $support);
+task('T3', 'A1', 'Set up access', $support, $adminId);
+task('T4', 'S1', 'Support-only follow-up', $support);
+task('T5', 'S1', 'Sales quote', $sales);
+q(sprintf("UPDATE %s SET duedate=NOW() - INTERVAL 1 DAY WHERE id=%d", TASK_TABLE, $tasks['T1']));
+q(sprintf("UPDATE %s SET flags=flags & ~%d, closed=NOW() WHERE id=%d", TASK_TABLE, TaskModel::ISOPEN, $tasks['T3']));
+$thisstaff = null;
+
 // -------------------------------------------------------- saved searches
 
 // Private searches, stored the way Tickets > Search > Save stores them.
@@ -310,6 +346,7 @@ if (is_file('/seed-local/seed.php')) {
 echo json_encode(array(
     'tickets' => $ids,
     'numbers' => array_map(fn($id) => Ticket::lookup($id)->getNumber(), $ids),
+    'tasks'   => $tasks,
     'status'  => array('open' => $open, 'in_progress' => $inProgress, 'closed' => $closed, 'parked' => $parked),
     'abbrev_field' => $abbrevFieldId,
     'plugin'  => array('id' => $pid, 'instance' => $iid),

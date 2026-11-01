@@ -158,6 +158,7 @@ final class BoardController
             'lanes'         => $lanes,
             'limits'        => BoardModel::parseLimits($s['wip_limits'], $view['statuses']),
             'now'           => BoardQuery::dbNow(),
+            'open_tasks'    => self::openTaskCounts(array_column($view['result']['rows'], 'id'), $thisstaff),
             'refresh_url'   => $s['refresh_seconds'] > 0 ? $base . '/state' : '',
             'refresh_seconds' => $s['refresh_seconds'],
             'signature'     => BoardModel::signature($view['result']['rows']),
@@ -615,6 +616,9 @@ final class BoardController
     /** Sub-tickets listed in the quick view; more point to the ticket view. */
     public const SUBTICKET_MAX = 50;
 
+    /** Tasks listed in the quick view; more point to the ticket's Tasks tab. */
+    public const TASK_MAX = 50;
+
     /**
      * HTML fragment for the quick view. Unknown and invisible tickets get
      * the same 404 as on the move endpoint.
@@ -669,6 +673,7 @@ final class BoardController
         include STAFFINC_DIR . 'templates/ticket-preview.tmpl.php';
         $preview = (string) ob_get_clean();
         $children = self::childTickets($ticket, $thisstaff, $statuses);
+        $tasks = self::ticketTasks($ticket, $thisstaff);
 
         header('Cache-Control: no-store');
         Http::response(200, BoardRenderer::panel(array(
@@ -684,6 +689,10 @@ final class BoardController
             'children'     => $children['rows'],
             'children_more' => $children['more'],
             'ticket_base'  => ROOT_PATH . 'scp/tickets.php?id=',
+            'tasks'        => $tasks['rows'],
+            'tasks_more'   => $tasks['more'],
+            'task_base'    => ROOT_PATH . 'scp/tasks.php?id=',
+            'now'          => BoardQuery::dbNow(),
             'strings'      => $strings,
         )), 'text/html');
         exit;
@@ -726,6 +735,84 @@ final class BoardController
         }
         $more = count($rows) > self::SUBTICKET_MAX;
         return array('rows' => array_slice($rows, 0, self::SUBTICKET_MAX), 'more' => $more);
+    }
+
+    /**
+     * Tasks of $ticket for the quick view. The caller has checked that the
+     * agent may see the ticket, which is all the core Tasks tab asks; on
+     * top, each task has to pass Task::checkStaffPerm(), so every listed
+     * task also opens in scp/tasks.php. Order: BoardModel::sortTasks().
+     *
+     * @return array{rows: array, more: bool}
+     */
+    private static function ticketTasks($ticket, Staff $staff): array
+    {
+        $rows = array();
+        foreach (self::tasksOf(array((int) $ticket->getId()), $staff, false) as $task) {
+            $open = (bool) $task->isOpen();
+            $due = $open ? (string) $task->getDueDate() : '';
+            $rows[] = array(
+                'id'         => (int) $task->getId(),
+                'number'     => (string) $task->getNumber(),
+                'title'      => (string) $task->getTitle(),
+                'open'       => $open,
+                'assignee'   => $open ? (string) $task->getAssigned(' / ') : '',
+                'due_raw'    => $due,
+                'due'        => $due !== '' ? (string) Format::datetime($due) : '',
+                'overdue'    => $open && $task->isOverdue(),
+                'closed_raw' => $open ? '' : (string) $task->getCloseDate(),
+            );
+        }
+        $rows = BoardModel::sortTasks($rows);
+        $more = count($rows) > self::TASK_MAX;
+        return array('rows' => array_slice($rows, 0, self::TASK_MAX), 'more' => $more);
+    }
+
+    /**
+     * Open tasks per ticket, for the badge on the cards. Same per-task rule
+     * as the quick view, so a badge never counts a task the panel leaves
+     * out. The ticket IDs come from the board query, which already applied
+     * the agent's ticket visibility.
+     *
+     * @param int[] $ticketIds
+     * @return array<int, int>  ticket ID => open tasks, only tickets with any
+     */
+    public static function openTaskCounts(array $ticketIds, Staff $staff): array
+    {
+        $out = array();
+        foreach (self::tasksOf($ticketIds, $staff, true) as $task) {
+            $tid = (int) $task->get('object_id');
+            $out[$tid] = ($out[$tid] ?? 0) + 1;
+        }
+        return $out;
+    }
+
+    /**
+     * Tasks attached to these tickets that pass Task::checkStaffPerm().
+     *
+     * @param int[] $ticketIds
+     * @return Task[]
+     */
+    private static function tasksOf(array $ticketIds, Staff $staff, bool $openOnly): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ticketIds))));
+        if (!$ids || !class_exists('Task')) {
+            return array();
+        }
+        $q = Task::objects()
+            ->select_related('dept', 'staff', 'team')
+            ->filter(array('object_type' => ObjectModel::OBJECT_TYPE_TICKET, 'object_id__in' => $ids))
+            ->order_by('id');
+        if ($openOnly) {
+            $q->filter(array('flags__hasbit' => TaskModel::ISOPEN));
+        }
+        $out = array();
+        foreach ($q as $task) {
+            if ($task->checkStaffPerm($staff)) {
+                $out[] = $task;
+            }
+        }
+        return $out;
     }
 
     /**

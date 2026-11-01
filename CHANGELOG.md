@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added
+
+- The quick view lists the ticket's tasks above the preview: number (opens the task), title, assignee, due date with overdue marked, and status. Open tasks come first, earliest due date first; completed ones are folded below. A ticket without tasks says "No tasks.". Agent board only, never on the client board.
+- Agent cards with open tasks carry a badge with their number, also on closed tickets.
+- Both list and badge include a task only if `Task::checkStaffPerm()` lets the agent open it, on top of the ticket visibility the quick view already checks.
+
 ## [0.4.0] - 2026-11-01
 
 ### Added

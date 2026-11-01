@@ -318,10 +318,11 @@ final class BoardRenderer
         );
         $html .= sprintf('<div class="spb-subject">%s</div>', self::e($c['subject']));
 
-        // Due and priority: agent board only, open tickets only. The portal
-        // shows neither to customers.
+        // Due and priority: agent board only, open tickets only. Open tasks:
+        // agent board only, on any ticket, since a closed ticket with open
+        // tasks is worth seeing. The portal shows none of these to customers.
+        $tags = '';
         if ($staff && $state === 'open') {
-            $tags = '';
             if ($c['urgency'] > 0 && $c['urgency'] <= 2 && $c['priority'] !== '') {
                 $tags .= sprintf('<span class="spb-tag spb-prio spb-urgency-%d">%s</span>',
                     (int) $c['urgency'], self::e($c['priority']));
@@ -336,9 +337,14 @@ final class BoardRenderer
                     $c['due'] !== '' ? sprintf(' title="%s"', self::e($c['due'])) : '',
                     self::e($t['due_' . $due['kind']]));
             }
-            if ($tags !== '') {
-                $html .= '<div class="spb-tags">' . $tags . '</div>';
-            }
+        }
+        $tasks = $staff ? (int) ($ctx['open_tasks'][(int) $c['id']] ?? 0) : 0;
+        if ($tasks > 0) {
+            $tags .= sprintf('<span class="spb-tag spb-tasks-badge">%s</span>',
+                self::e($tasks === 1 ? $t['tasks_badge_one'] : sprintf($t['tasks_badge'], $tasks)));
+        }
+        if ($tags !== '') {
+            $html .= '<div class="spb-tags">' . $tags . '</div>';
         }
 
         $meta = array();
@@ -472,12 +478,94 @@ final class BoardRenderer
         }
         $html .= '</div>';
 
+        // Tasks before the preview: they are the open work on the ticket, and
+        // under a long thread nobody would scroll to them.
+        $html .= self::tasks($p['tasks'] ?? array(), !empty($p['tasks_more']),
+            (string) ($p['task_base'] ?? ''), (string) ($p['now'] ?? ''), $t);
         $html .= sprintf('<div class="spb-preview">%s</div>',
             self::threadHeading((string) $p['preview_html'], (string) ($t['panel_thread'] ?? '')));
         $html .= self::subtickets($p['children'] ?? array(), !empty($p['children_more']),
             (string) ($p['ticket_base'] ?? ''), $t);
 
         return $html . '</div>';
+    }
+
+    /**
+     * The ticket's tasks between the actions and the preview: open ones as
+     * a list, closed ones folded below. Agent quick view only; tasks are internal. Unlike
+     * sub-tickets, an empty list says so, since tasks replace to-do
+     * sub-tickets and "none" is worth knowing. Public for the unit tests.
+     *
+     * @param array $tasks  id, number, title, open, assignee, due_raw, due,
+     *        overdue; in display order (BoardModel::sortTasks())
+     */
+    public static function tasks(array $tasks, bool $more, string $base, string $now, array $t): string
+    {
+        $open = array_values(array_filter($tasks, static function ($k) {
+            return !empty($k['open']);
+        }));
+        $closed = array_values(array_filter($tasks, static function ($k) {
+            return empty($k['open']);
+        }));
+
+        $html = sprintf(
+            '<section class="spb-tasks"><h3 class="spb-tasks-heading">%s%s</h3>',
+            self::e($t['panel_tasks']),
+            $open ? sprintf(' <span class="spb-count">%d</span>', count($open)) : ''
+        );
+        if (!$tasks) {
+            return $html . sprintf('<p class="spb-hint spb-tasks-none">%s</p></section>', self::e($t['panel_tasks_none']));
+        }
+        if ($open) {
+            $html .= '<ul class="spb-tasks-open">';
+            foreach ($open as $k) {
+                $html .= self::taskRow($k, $base, $now, $t);
+            }
+            $html .= '</ul>';
+        }
+        if ($closed) {
+            $html .= sprintf(
+                '<details class="spb-tasks-closed"%s><summary>%s <span class="spb-count">%d</span></summary><ul>',
+                $open ? '' : ' open',
+                self::e($t['panel_tasks_closed']),
+                count($closed)
+            );
+            foreach ($closed as $k) {
+                $html .= self::taskRow($k, $base, $now, $t);
+            }
+            $html .= '</ul></details>';
+        }
+        if ($more) {
+            $html .= sprintf('<p class="spb-hint">%s</p>', self::e($t['panel_tasks_more']));
+        }
+        return $html . '</section>';
+    }
+
+    private static function taskRow(array $k, string $base, string $now, array $t): string
+    {
+        $open = !empty($k['open']);
+        $due = '';
+        if ($open && (string) ($k['due_raw'] ?? '') !== '') {
+            $state = BoardModel::dueState((string) $k['due_raw'], $now, !empty($k['overdue']));
+            $kind = $state['kind'] ?? 'later';
+            $due = sprintf(' <span class="spb-tag spb-due spb-due-%s">%s</span>',
+                self::e($kind),
+                self::e(sprintf($t[$kind === 'overdue' ? 'task_overdue' : 'task_due'], (string) $k['due'])));
+        }
+        return sprintf(
+            '<li class="spb-task" data-task-id="%1$d"><a href="%2$s">#%3$s</a>'
+            . ' <span class="spb-task-title">%4$s</span>%5$s%6$s'
+            . ' <span class="spb-badge spb-state-%7$s">%8$s</span></li>',
+            (int) $k['id'],
+            self::e($base . rawurlencode((string) $k['id'])),
+            self::e((string) $k['number']),
+            self::e((string) $k['title']),
+            $open ? sprintf(' <span class="spb-child-who">%s</span>',
+                self::e((string) ($k['assignee'] ?? '') !== '' ? $k['assignee'] : $t['unassigned'])) : '',
+            $due,
+            $open ? 'open' : 'closed',
+            self::e($t[$open ? 'task_open' : 'task_closed'])
+        );
     }
 
     /**

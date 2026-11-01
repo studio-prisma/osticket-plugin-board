@@ -25,13 +25,17 @@ async function act(page, button, number) {
   await expect(page.locator('.spb-panel-body')).toHaveAttribute('data-number', number);
 }
 
-// An open card without sub-tickets that has another open card after it.
+// An open card without sub-tickets or open tasks that has another open card
+// after it. osTicket refuses to close a ticket with open tasks. G1 and X1 are
+// left alone: a close and reopen would reset the seeded due dates 6-extras
+// checks.
 function closablePair(page) {
-  return page.evaluate(() => {
+  return page.evaluate((keep) => {
     const cards = [...document.querySelectorAll('.spb-col[data-state="open"] .spb-cards > .spb-card')];
-    const i = cards.findIndex((c, k) => !c.querySelector('.spb-children') && cards[k + 1]);
+    const i = cards.findIndex((c, k) => !c.querySelector('.spb-children, .spb-tasks-badge')
+      && !keep.includes(c.dataset.number) && cards[k + 1]);
     return i < 0 ? null : { id: cards[i].dataset.ticketId, number: cards[i].dataset.number, next: cards[i + 1].dataset.number };
-  });
+  }, [n.G1, n.X1]);
 }
 
 function post(page, url, body, withToken = true) {
@@ -302,6 +306,52 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('tasks above the preview: open ones with due date and assignee, closed folded, link to the task', async ({ page }) => {
+    const errors = watchErrors(page);
+    await expect(page.locator(`.spb-card[data-number="${n.A1}"] .spb-tasks-badge`).first()).toHaveText('2 open tasks');
+    await expect(page.locator(`.spb-card[data-number="${n.S1}"] .spb-tasks-badge`)).toHaveText('2 open tasks');
+    await openPanel(page, n.A1);
+    const tasks = page.locator('.spb-panel-body .spb-tasks');
+    await expect(tasks.locator('.spb-tasks-heading')).toHaveText('Tasks 2');
+    const open = tasks.locator('.spb-tasks-open .spb-task');
+    await expect(open).toHaveCount(2);
+    // Overdue first, with the admin as assignee; markup in a title stays text.
+    await expect(open.nth(0)).toHaveAttribute('data-task-id', String(seed.tasks.T1));
+    await expect(open.nth(0).locator('.spb-due-overdue')).toContainText('Overdue since');
+    await expect(open.nth(0).locator('.spb-child-who')).toHaveText('Board Admin');
+    await expect(open.nth(0).locator('.spb-task-title')).toContainText('draft');
+    await expect(tasks.locator('b')).toHaveCount(0);
+    await expect(open.nth(1).locator('.spb-child-who')).toHaveText('Unassigned');
+    await expect(open.nth(1).locator('.spb-due')).toHaveCount(0);
+    // Closed ones folded, one click away.
+    const closed = tasks.locator('.spb-tasks-closed');
+    await expect(closed).not.toHaveAttribute('open', '');
+    await expect(closed.locator('.spb-task')).toBeHidden();
+    await closed.locator('summary').click();
+    await expect(closed.locator('.spb-task .spb-badge')).toHaveText('Completed');
+    // Above the preview, so a long thread doesn't push them out of sight.
+    const above = await page.evaluate(() => {
+      const list = document.querySelector('.spb-panel-body .spb-tasks');
+      const preview = document.querySelector('.spb-panel-body .spb-preview');
+      return !!(list.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(above).toBe(true);
+    await page.screenshot({ path: path.join(LOCAL, 'screens', 'quickview-tasks.png'), fullPage: false });
+
+    const link = open.nth(0).locator('a');
+    await expect(link).toHaveAttribute('href', `/scp/tasks.php?id=${seed.tasks.T1}`);
+    await Promise.all([page.waitForURL(/\/scp\/tasks\.php\?id=/), link.click()]);
+    await expect(page.locator('body')).toContainText('Check the offer');
+    expect(errors).toEqual([]);
+  });
+
+  test('a ticket without tasks says so quietly', async ({ page }) => {
+    await openPanel(page, n.A5);
+    await expect(page.locator('.spb-panel-body .spb-tasks-none')).toHaveText('No tasks.');
+    await expect(page.locator('.spb-panel-body .spb-task')).toHaveCount(0);
+    await expect(page.locator(`.spb-card[data-number="${n.A5}"] .spb-tasks-badge`)).toHaveCount(0);
+  });
+
   test('act endpoint: CSRF, unknown action or value, unknown ticket', async ({ page }) => {
     expect((await post(page, ACT, `ticket_id=${t.A5}&act=claim`, false)).status).toBe(400);
     expect((await post(page, ACT, `ticket_id=${t.A5}&act=delete`)).status).toBe(422);
@@ -335,6 +385,15 @@ test.describe('view-only agent in Sales', () => {
     }
   });
 
+  test('tasks: only the ones the agent may open, and the badge counts the same', async ({ page }) => {
+    // T4 sits in Support, which this agent can't access; T5 is in Sales.
+    await expect(page.locator(`.spb-card[data-number="${n.S1}"] .spb-tasks-badge`)).toHaveText('1 open task');
+    await openPanel(page, n.S1);
+    const ids = await page.locator('.spb-panel-body .spb-task').evaluateAll((els) => els.map((e) => Number(e.dataset.taskId)));
+    expect(ids).toEqual([seed.tasks.T5]);
+    await expect(page.locator('.spb-panel-body')).not.toContainText('Support-only follow-up');
+  });
+
   test('actions the role does not allow are refused on the endpoint too', async ({ page }) => {
     const r = await post(page, ACT, `ticket_id=${t.S1}&act=status&value=${seed.status.closed}`);
     expect(r.status).toBe(403);
@@ -365,6 +424,9 @@ test.describe('view-only agent in Sales', () => {
 test('a client session gets no panel, note or action', async ({ page }) => {
   await clientLogin(page, 'alice@acme.example');
   await page.goto('/ajax.php/board');
+  // Tasks are internal: no badge, no titles on the portal board.
+  await expect(page.locator('.spb-card').first()).toBeVisible();
+  expect(await page.content()).not.toMatch(/spb-task|Check the offer|Call the customer back/);
   const r = await page.evaluate(async (id) => {
     const token = document.querySelector('meta[name="csrf_token"]').content;
     const panel = await fetch(`/scp/ajax.php/board/panel/${id}`);
