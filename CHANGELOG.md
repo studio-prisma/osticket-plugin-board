@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added
+
+- Custom properties for the colours that were still fixed, so a dark theme can restyle the whole board: `--spb-drawer-bg` and `--spb-drawer-solid` (quick view surface, translucent and for reduced transparency), `--spb-fill` and `--spb-fill-strong` (column count, close button), `--spb-accent-fill` (accent buttons with white text, defaults to `--spb-accent`) and `--spb-soon` ("due today/tomorrow" tag). The quick view's action panel now uses `--spb-col-bg`. Defaults look as before.
+
 ## [0.4.0] - 2026-11-01
 
 ### Added
