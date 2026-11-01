@@ -8,6 +8,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Custom properties for the colours that were still fixed, so a dark theme can restyle the whole board: `--spb-drawer-bg` and `--spb-drawer-solid` (quick view surface, translucent and for reduced transparency), `--spb-fill` and `--spb-fill-strong` (column count, close button), `--spb-accent-fill` (accent buttons with white text, defaults to `--spb-accent`) and `--spb-soon` ("due today/tomorrow" tag). The quick view's action panel now uses `--spb-col-bg`. Defaults look as before.
+
 - Setting "Status abbreviations" (off by default): the variable name of a property of the Ticket Status list. Agent board column heads then show the status's value for that property instead of its name; the full name is the tooltip and stays the heading's text for screen readers. Statuses without a value keep their name. The client board always shows full names.
 
 ### Fixed

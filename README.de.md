@@ -86,7 +86,7 @@ Farben und Radien sind CSS-Variablen auf `.spb-wrap`. Überschreiben im eigenen 
 .spb-wrap { --spb-accent: #330066; --spb-radius: 8px; }
 ```
 
-Alle Variablen stehen oben in [assets/board.css](assets/board.css).
+Alle Variablen stehen oben in [assets/board.css](assets/board.css). Ein dunkles Theme setzt auch die Flächen: `--spb-drawer-bg`, `--spb-drawer-solid`, `--spb-card-bg`, `--spb-col-bg`, `--spb-fill`, und `--spb-accent-fill`, wenn der Akzent zu hell für weiße Schrift ist.
 
 Das Board folgt den Systemeinstellungen für reduzierte Bewegung (die Schnellansicht blendet über, statt zu gleiten), reduzierte Transparenz (deckendes Panel) und erhöhten Kontrast.
 
