@@ -82,6 +82,7 @@ Als **Nicht-Admin**-Testagent:
 | 4.7 | Unter „Ansicht" eine Queue wählen, z. B. „My Tickets", dann eine eigene gespeicherte Suche | Dieselben Tickets wie diese Queue oder Suche unter Tickets; die Auswahl bleibt nach Neuladen erhalten |
 | 4.8 | `/scp/ajax.php/board?queue=<ID der privaten Suche eines anderen Agenten>` öffnen | Hinweis „nicht verfügbar", volles Standard-Board, nichts aus dieser Suche sichtbar |
 | 4.9 | Karte anklicken | Schnellansicht mit Ticket-Vorschau und nur den Aktionen, die die Rolle des Agenten erlaubt |
+| 4.9b | Schnellansicht eines Tickets mit Aufgaben öffnen, als Agent ohne Zugriff auf die Abteilung einer davon | Aufgaben über der Vorschau; die Aufgabe aus der fremden Abteilung fehlt, außer sie ist dem Agenten oder seinem Team zugewiesen, und die Markierung auf der Karte zählt genauso. Ein Ticket ohne Aufgaben zeigt „Keine Aufgaben." |
 | 4.10 | In der Schnellansicht: An Agent zuweisen, jemanden aus der Liste wählen | Kein Dialog; die Schnellansicht zeigt die neue Zuweisung, die Ticket-Historie listet sie |
 | 4.12 | Nach Organisation gruppieren, dann eine Karte in die Zeile einer anderen Organisation ziehen | Zeilen pro Organisation; die Karte bleibt in ihrer Zeile |
 | 4.13 | In einem zweiten Browserfenster den Status eines Tickets ändern, das Board nicht anfassen | Innerhalb des Intervalls aktualisiert sich das Board und meldet „Board updated" |

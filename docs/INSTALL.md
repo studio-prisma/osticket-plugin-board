@@ -82,6 +82,7 @@ As the **non-admin** test agent:
 | 4.7 | Pick a queue under "View", e.g. "My Tickets", then one of your saved searches | Same tickets as that queue or search under Tickets; the choice is still set after reload |
 | 4.8 | Open `/scp/ajax.php/board?queue=<ID of another agent's private search>` | Notice "not available", full default board, nothing of that search shown |
 | 4.9 | Click a card | Quick view with the ticket preview and only the actions the agent's role allows |
+| 4.9b | Open the quick view of a ticket with tasks, as an agent without access to the department of one of them | Tasks above the preview; the task from the other department is missing unless it is assigned to the agent or their team, and the card badge counts the same. A ticket without tasks shows "No tasks." |
 | 4.10 | In the quick view: Assign to agent, pick someone from the list | No dialog; the quick view shows the new assignee, ticket history lists the assignment |
 | 4.12 | Group by organisation, then try to drag a card into another organisation's row | Rows per organisation; the card stays in its own row |
 | 4.13 | Change a ticket's status in a second browser window, leave the board alone | Within the refresh interval the board updates and says "Board updated" |

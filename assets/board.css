@@ -696,26 +696,51 @@
 }
 
 .spb-thread-heading,
-.spb-subtickets-heading {
+.spb-subtickets-heading,
+.spb-tasks-heading {
   margin: 20px 0 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--spb-muted);
 }
 
-.spb-subtickets ul {
+.spb-subtickets ul,
+.spb-tasks ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.spb-subtickets .spb-child {
+.spb-subtickets .spb-child,
+.spb-tasks .spb-task {
   padding: 6px 0;
   border-top: 0.5px solid var(--spb-border);
   font-size: 13px;
 }
 
-.spb-subtickets .spb-count {
+/* Done tasks stay in reach but step back. */
+.spb-tasks-closed {
+  margin-top: 6px;
+}
+
+.spb-tasks-closed > summary {
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--spb-muted);
+  cursor: pointer;
+}
+
+.spb-tasks-closed .spb-task-title {
+  color: var(--spb-muted);
+}
+
+.spb-tasks .spb-due {
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+
+.spb-subtickets .spb-count,
+.spb-tasks .spb-count {
   margin-left: 4px;
   font-weight: 400;
   color: var(--spb-faint);

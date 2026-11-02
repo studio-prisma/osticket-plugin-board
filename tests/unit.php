@@ -258,6 +258,9 @@ check('panel: sub-tickets come after the preview', strpos(BoardRenderer::panel(a
     'children' => array(array('id' => 9, 'number' => '9', 'subject' => 's', 'status_name' => 'Open', 'status_state' => 'open', 'assignee' => '')))),
     '<div id="core"></div></div><section class="spb-subtickets">') !== false
     && strpos($panel, 'spb-subtickets') === false);
+check('panel: tasks between the actions and the preview, empty state without tasks',
+    strpos($panel, '</div><section class="spb-tasks">') !== false
+    && strpos($panel, '</section><div class="spb-preview">') !== false && strpos($panel, 'spb-tasks-none') !== false);
 check('panel: core preview passed through unchanged', strpos($panel, '<div class="spb-preview"><div id="core">core</div></div>') !== false);
 check('panel: note form posts ticket id to the note route', strpos($panel, 'action="/scp/ajax.php/board/note"') !== false
     && strpos($panel, 'name="ticket_id" value="7"') !== false && strpos($panel, 'maxlength="' . BoardController::NOTE_MAX . '"') !== false);
@@ -316,6 +319,52 @@ check('tags: none for normal priority or closed tickets', substr_count($staffTag
 $clientTagged = BoardRenderer::render($tagged, array('mode' => 'client', 'ticket_url' => '/t?id=', 'strings' => $strings,
     'closed_days' => 14, 'max_cards' => 300, 'truncated' => false, 'now' => $now));
 check('tags: never on the client board', strpos($clientTagged, 'spb-tag') === false);
+$taskCtx = array_merge($pickerCtx, array('now' => $now, 'open_tasks' => array(1 => 1, 2 => 3)));
+$staffTasks = BoardRenderer::render($tagged, $taskCtx);
+check('tags: open-task badge on agent cards, singular and plural, closed tickets too',
+    strpos($staffTasks, 'spb-tasks-badge">1 open task<') !== false && strpos($staffTasks, 'spb-tasks-badge">3 open tasks<') !== false
+    && substr_count($staffTasks, 'spb-tasks-badge') === 2 && strpos($staffTagged, 'spb-tasks-badge') === false);
+check('tags: open-task badge never on the client board', strpos(BoardRenderer::render($tagged, array('mode' => 'client', 'ticket_url' => '/t?id=',
+    'strings' => $strings, 'closed_days' => 14, 'max_cards' => 300, 'truncated' => false, 'now' => $now,
+    'open_tasks' => array(1 => 1, 2 => 3))), 'spb-tasks-badge') === false);
+
+// ---------------------------------------------------------------- tasks
+
+$task = fn(int $id, bool $open, array $extra = array()) => array_merge(array('id' => $id, 'number' => (string) $id,
+    'title' => "Task $id", 'open' => $open, 'assignee' => '', 'due_raw' => '', 'due' => '', 'overdue' => false, 'closed_raw' => ''), $extra);
+check('tasks: open first by due date, undated after by number, closed newest first', array_column(BoardModel::sortTasks(array(
+    $task(5, false, array('closed_raw' => '2026-10-01 10:00:00')),
+    $task(10, true),
+    $task(2, true),
+    $task(6, false, array('closed_raw' => '2026-10-05 10:00:00')),
+    $task(3, true, array('due_raw' => '2026-10-20 10:00:00')),
+    $task(4, true, array('due_raw' => '2026-10-12 10:00:00')),
+)), 'id') === array(4, 3, 2, 10, 6, 5));
+$taskList = BoardRenderer::tasks(array(
+    $task(1, true, array('title' => '<img src=x>', 'assignee' => '<b>Ann</b>', 'due_raw' => '2026-10-09 09:00:00', 'due' => '10/9/26')),
+    $task(2, true, array('due_raw' => '2026-10-30 09:00:00', 'due' => '10/30/26')),
+    $task(3, false),
+), false, '/scp/tasks.php?id=', $now, $strings);
+check('tasks: heading counts open ones, open list, closed folded', strpos($taskList, '<h3 class="spb-tasks-heading">Tasks <span class="spb-count">2</span></h3>') !== false
+    && substr_count($taskList, 'class="spb-task"') === 3
+    && strpos($taskList, '<details class="spb-tasks-closed"><summary>Completed <span class="spb-count">1</span></summary>') !== false
+    && strpos($taskList, '</ul><details') !== false);
+check('tasks: link into the agent task view, status badge', strpos($taskList, 'href="/scp/tasks.php?id=2">#2</a>') !== false
+    && substr_count($taskList, 'spb-state-open">Open<') === 2 && strpos($taskList, 'spb-state-closed">Completed<') !== false);
+check('tasks: overdue highlighted, later due date neutral, closed without due', strpos($taskList, 'spb-due-overdue">Overdue since 10/9/26<') !== false
+    && strpos($taskList, 'spb-due-later">Due 10/30/26<') !== false && substr_count($taskList, 'spb-due ') === 2);
+check('tasks: data escaped, unassigned open task says so, closed one shows no assignee', strpos($taskList, '<img') === false && strpos($taskList, '<b>') === false
+    && strpos($taskList, '&lt;b&gt;Ann&lt;/b&gt;') !== false && substr_count($taskList, 'spb-child-who') === 2
+    && strpos($taskList, 'spb-child-who">' . $strings['unassigned'] . '<') !== false);
+$onlyClosed = BoardRenderer::tasks(array($task(3, false)), true, '/', $now, $strings);
+check('tasks: only closed ones are unfolded, no count, cut-off hint', strpos($onlyClosed, '<details class="spb-tasks-closed" open>') !== false
+    && strpos($onlyClosed, 'spb-tasks-heading">Tasks</h3>') !== false && strpos($onlyClosed, $strings['panel_tasks_more']) !== false
+    && strpos($taskList, $strings['panel_tasks_more']) === false);
+check('tasks: calm empty state', BoardRenderer::tasks(array(), false, '/', $now, $strings)
+    === '<section class="spb-tasks"><h3 class="spb-tasks-heading">Tasks</h3><p class="spb-hint spb-tasks-none">No tasks.</p></section>');
+check('i18n: task strings in both languages', count(array_filter(array('panel_tasks', 'panel_tasks_none', 'task_due', 'tasks_badge'),
+    fn($k) => isset(BoardI18n::strings('de_DE')[$k], $strings[$k]))) === 4
+    && BoardI18n::strings('de_DE')['panel_tasks'] === 'Aufgaben');
 
 // ---------------------------------------------------------------- lanes
 

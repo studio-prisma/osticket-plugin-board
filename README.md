@@ -17,7 +17,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Which tickets | Exactly what the agent's departments, assignments and referrals allow (`Staff::getTicketsVisibility()`, same as the queues) | Own tickets, organisation tickets if the organisation shares them, collaborations if enabled (same three sources as the portal's ticket list) |
 | Filter | Any queue or saved search of the agent panel, picked above the board, remembered per session | No |
 | Change status | Drag and drop, or `Alt+←` / `Alt+→` on a focused card. Closing asks first | No |
-| Quick view | Click or `Enter` on a card: osTicket's ticket preview, summary, recent thread and sub-tickets on one page, plus the actions the agent's role allows. Closing a ticket from it moves straight on to the next open card; work-through columns such as a triage status move on within the column (settings) | No |
+| Quick view | Click or `Enter` on a card: the ticket's tasks, osTicket's ticket preview, summary, recent thread and sub-tickets on one page, plus the actions the agent's role allows. Closing a ticket from it moves straight on to the next open card; work-through columns such as a triage status move on within the column (settings) | No |
 | Actions | One click for status, claim, release, mark answered. Pickers in the panel for agent, team, department and priority. Refer and add task open osTicket's dialogs. A status change can be undone from the toast | No |
 | Internal note | From the quick view, as plain text. Text in the note field is saved with whichever action you click next | No |
 | Due and priority | Tags for overdue, due today, due tomorrow, and High/Emergency priority | No |
@@ -28,10 +28,13 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Live refresh | Changes made elsewhere appear by themselves while you're idle, or behind a "Show updates" button while you're working | No |
 | Shown per card | Number, subject, requester, department, assignee, last update, overdue flag | Number, subject, department, last update |
 | Sub-tickets | Folded list under the parent, each with its own status | Same, limited to sub-tickets the client may see |
+| Tasks | Badge with the number of open tasks on the card. In the quick view: number, title, assignee, due date (overdue marked) and status, open ones first, completed ones folded; the number opens the task | No, tasks are internal |
 
 **Filters are osTicket's own.** The board has no filter system of its own. The "View" picker lists the queues and saved searches the agent sees under Tickets, with the same access check (public queues, own private searches, never another agent's). Filters are created and saved where they always are: Tickets, then Search, then Save. The board applies their criteria and the same visibility rules as the ticket list. Sub-tickets the queue hides as rows still show up folded under their parent, limited to what the agent may see.
 
 **Actions run through osTicket's own code.** The quick view only offers what the ticket view would offer the same agent. Status, claim, release, mark answered, assign, transfer and priority run on click through `/board/act`, which checks the same role permissions as the core dialog and then calls the same core methods with the same forms (`setStatus()`, `claim()`, `release()`, `markAnswered()`, `assign()`, `transfer()`, `updateField()`). Pickers only list what the core dialog would list, and the endpoint refuses anything else. Alerts and the ticket history come from osTicket. Refer and add task still open the core dialogs. Notes end in the core's `Ticket::postNote()` and are stored as plain text.
+
+**Tasks follow osTicket's rules twice.** The quick view of a ticket the agent may not see answers 404, as before, so none of its tasks show. Of a visible ticket, a task is listed and counted only if `Task::checkStaffPerm()` lets the agent open it (department access, assignment or team), so every listed task opens in `scp/tasks.php`. osTicket's own Tasks tab lists all tasks of a visible ticket; the board shows the subset the agent can also open. At most 50 per ticket; beyond that a hint points to the Tasks tab.
 
 Sub-tickets are read from `ost_ticket.ticket_pid`. That's the column osTicket's merge feature and the common sub-ticket plugins write. No thread entries are loaded, so internal notes can't reach either board.
 
@@ -121,6 +124,7 @@ Not verified: osTicket 1.17, Nginx, MySQL instead of MariaDB, other portal theme
 - **Rows don't change ownership.** In a grouped view a card moves between statuses within its row; dropping it into another organisation's or agent's row does nothing. Reassign through the quick view.
 - **Due tags are for what needs attention:** overdue, today, tomorrow. A due date days away (often just the default SLA) gets no tag; "Sort: Due date" still orders by it.
 - **Live refresh reloads the whole board** in the background when something changed, and it pauses in background tabs. With many agents and short intervals that's one extra page render per agent per change; 60 seconds is the default for a reason.
+- **Task changes don't trigger the live refresh.** A task added or closed elsewhere updates the card badge on the next board load; the quick view always loads fresh.
 - **Dragging changes the status only.** Assignment, priority and the rest go through the quick view. The order of cards within a column isn't stored.
 - **Children don't follow.** Moving a parent card changes the parent only. Sub-tickets keep their status.
 - **Disabled statuses** (Admin Panel → Lists → Ticket Status → Disable) get no column and aren't offered in the quick view or the settings' status pickers, as in osTicket's own status menu. While tickets still sit in one, its column stays, marked, so they don't drop off the board: cards can be moved out of it, not into it. Undo from the toast can't move a ticket back into a disabled status either.
