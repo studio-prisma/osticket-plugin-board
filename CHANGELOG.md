@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-02
+
+### Added
+
+- Actions for the assistant of the [AI Actions](https://github.com/studio-prisma/osticket-plugin-ai-actions) plugin, registered through its `ai-actions.tools` signal: "Release assignment" and "Mark as answered/unanswered". They run through the quick view's own handler, so its permission checks apply to the agent who confirms. Without AI Actions nothing changes.
+
 ## [0.5.0] - 2026-11-01
 
 ### Added
@@ -85,7 +91,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.2...v0.3.3
