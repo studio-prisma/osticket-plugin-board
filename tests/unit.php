@@ -558,5 +558,25 @@ check('buffer: ajax.php only for the board page itself',
     && BoardPlugin::isPortalPath('/ajax.php', '') === false
     && BoardPlugin::isPortalPath('/scp/ajax.php', '/board') === false);
 
+// --------------------------------------------------------------- AI Actions
+
+$aiRegistry = new class {
+    public $tools = array();
+    public function add(array $t) { $this->tools[$t['name']] = $t; return true; }
+};
+BoardAiTools::register($aiRegistry);
+check('ai: two board actions registered, names in the x_ namespace',
+    array_keys($aiRegistry->tools) === array('x_board_release', 'x_board_answered'));
+check('ai: every action has validate, run and a closed input schema', array_reduce($aiRegistry->tools, function ($ok, $t) {
+    return $ok && is_callable($t['validate']) && is_callable($t['run']) && is_callable($t['summary'])
+        && ($t['input_schema']['additionalProperties'] ?? true) === false;
+}, true));
+check('ai: only answered/unanswered as a mark', $aiRegistry->tools['x_board_answered']['input_schema']['properties']['mark']['enum']
+    === array('answered', 'unanswered'));
+check('ai: board results map to ok or a message', BoardAiTools::result(array(200, array('ok' => true))) === array('ok' => true)
+    && BoardAiTools::result(array(403, array('error' => 'forbidden'))) === array('ok' => false, 'message' => 'forbidden')
+    && BoardAiTools::result(array(422, array('error' => 'rejected', 'message' => 'No'))) === array('ok' => false, 'message' => 'No'));
+check('ai: a registry without add() is ignored', (function () { BoardAiTools::register(new stdClass()); return true; })());
+
 echo "\n$count checks, $failures failed\n";
 exit($failures ? 1 : 0);

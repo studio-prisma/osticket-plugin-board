@@ -414,6 +414,17 @@ final class BoardController
         return self::json(200, $payload);
     }
 
+    /**
+     * One quick-view action for another plugin (AI Actions), with the same
+     * permission checks as the quick view's own buttons.
+     *
+     * @return array{0:int, 1:array}
+     */
+    public static function act($ticket, $staff, string $act, string $value = ''): array
+    {
+        return self::runAct($ticket, $staff, $act, $value);
+    }
+
     /** @return array{0:int, 1:array} */
     private static function runAct($ticket, $staff, string $act, string $value): array
     {

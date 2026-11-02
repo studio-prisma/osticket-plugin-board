@@ -42,11 +42,12 @@ require_once __DIR__ . '/src/BoardQuery.php';
 require_once __DIR__ . '/src/BoardAssets.php';
 require_once __DIR__ . '/src/BoardController.php';
 require_once __DIR__ . '/src/BoardLanding.php';
+require_once __DIR__ . '/src/BoardAiTools.php';
 
 class BoardPlugin extends Plugin
 {
     /** Mirrors plugin.php; used for cache-busting the asset URLs only. */
-    public const VERSION = '0.5.0';
+    public const VERSION = '0.6.0';
 
     /** Route bases, relative to ROOT_PATH. */
     public const STAFF_BASE = 'scp/ajax.php/board';
@@ -105,6 +106,10 @@ class BoardPlugin extends Plugin
                 'class'     => 'no-pjax',
             ));
             Signal::connect('ajax.scp', array(__CLASS__, 'staffRoutes'));
+            // Board actions for the AI Actions plugin's assistant, if it is installed.
+            Signal::connect('ai-actions.tools', static function ($registry) {
+                BoardAiTools::register($registry);
+            });
         }
 
         if ($s['enable_client']) {
