@@ -29,6 +29,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Shown per card | Number, subject, requester, department, assignee, last update, overdue flag | Number, subject, department, last update |
 | Sub-tickets | Folded list under the parent, each with its own status | Same, limited to sub-tickets the client may see |
 | Tasks | Badge with the number of open tasks on the card. In the quick view: number, title, assignee, due date (overdue marked) and status, open ones first, completed ones folded; the number opens the task | No, tasks are internal |
+| AI Actions | With the [AI Actions](https://github.com/studio-prisma/osticket-plugin-ai-actions) plugin (0.5.3+): its assistant can plan "release assignment" and "mark answered/unanswered" through the board's own handler, and cards with a waiting proposal of an AI agent get a dot | No |
 
 **Filters are osTicket's own.** The board has no filter system of its own. The "View" picker lists the queues and saved searches the agent sees under Tickets, with the same access check (public queues, own private searches, never another agent's). Filters are created and saved where they always are: Tickets, then Search, then Save. The board applies their criteria and the same visibility rules as the ticket list. Sub-tickets the queue hides as rows still show up folded under their parent, limited to what the agent may see.
 
