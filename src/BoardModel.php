@@ -389,6 +389,52 @@ final class BoardModel
             'urgency'   => (int) ($r['urgency'] ?? 0),
             'org'       => (string) ($r['org'] ?? ''),
             'team'      => (string) ($r['team'] ?? ''),
+            'email'     => (string) ($r['email'] ?? ''),
         );
+    }
+
+    /** Longest search text per card, in bytes; protects the page size. */
+    public const SEARCH_MAX = 4000;
+
+    /**
+     * What the board search matches a card against, one field per line:
+     * number (with and without "#"), subject, requester name and mail,
+     * organisation, department, assignee, team, the sub-tickets nested
+     * under it, and the given task lines. Only fields the viewer already
+     * gets to see: for a customer ($agent false) number, subject,
+     * department and sub-tickets, whatever else the row carries.
+     * Lower-casing happens in the browser, which also folds accents.
+     *
+     * @param string[] $tasks  "number title" per task of the ticket (agents only)
+     */
+    public static function searchText(array $card, array $tasks = array(), bool $agent = true): string
+    {
+        $parts = array('#' . $card['number'], $card['subject']);
+        if ($agent) {
+            array_push($parts, $card['user'], $card['email'] ?? '', $card['org'], $card['dept'], $card['assignee'], $card['team']);
+        } else {
+            $parts[] = $card['dept'];
+        }
+        foreach ($card['children'] ?? array() as $k) {
+            $parts[] = '#' . $k['number'] . ' ' . $k['subject'];
+        }
+        foreach ($agent ? $tasks : array() as $line) {
+            $parts[] = (string) $line;
+        }
+        $lines = array();
+        foreach ($parts as $p) {
+            // One line per field, so a search never matches across two.
+            $p = trim((string) preg_replace('/\s+/u', ' ', (string) $p));
+            if ($p !== '') {
+                $lines[] = $p;
+            }
+        }
+        $text = implode("\n", $lines);
+        if (strlen($text) > self::SEARCH_MAX) {
+            // Cut on a character boundary.
+            $text = (string) preg_replace('/[\x80-\xBF]+$/', '', substr($text, 0, self::SEARCH_MAX));
+            $text = rtrim((string) preg_replace('/[\xC0-\xFF]$/', '', $text));
+        }
+        return $text;
     }
 }

@@ -578,5 +578,131 @@ check('ai: board results map to ok or a message', BoardAiTools::result(array(200
     && BoardAiTools::result(array(422, array('error' => 'rejected', 'message' => 'No'))) === array('ok' => false, 'message' => 'No'));
 check('ai: a registry without add() is ignored', (function () { BoardAiTools::register(new stdClass()); return true; })());
 
+// ------------------------------------------------------------------ search
+
+$card = BoardModel::build($statuses, array(
+    row(1, 1, 0, array('subject' => 'Printer <b>jam</b>', 'user' => 'Alice Müller', 'email' => 'alice@example.com',
+        'org' => 'Acme', 'team' => 'Second line', 'assignee' => 'Bob Agent')),
+    row(2, 1, 1, array('subject' => 'Toner order')),
+))['columns'][0]['cards'][0];
+$text = BoardModel::searchText($card, array('#7 Call back'));
+check('search: number with #, subject, sender name and mail', strpos($text, "#000001\n") === 0
+    && strpos($text, 'Printer <b>jam</b>') !== false && strpos($text, 'Alice Müller') !== false
+    && strpos($text, 'alice@example.com') !== false);
+check('search: org, team, assignee, sub-ticket and task lines', strpos($text, "Acme") !== false
+    && strpos($text, 'Second line') !== false && strpos($text, 'Bob Agent') !== false
+    && strpos($text, '#000002 Toner order') !== false && strpos($text, '#7 Call back') !== false);
+check('search: one field per line, whitespace collapsed, empties dropped',
+    BoardModel::searchText(array('number' => '9', 'subject' => "a \n\t b", 'user' => '', 'org' => '', 'dept' => '',
+        'assignee' => '', 'team' => '')) === "#9\na b");
+$long = BoardModel::searchText(array('number' => '9', 'subject' => str_repeat('ä', 3000), 'user' => '', 'org' => '',
+    'dept' => '', 'assignee' => '', 'team' => ''));
+check('search: capped, still valid UTF-8', strlen($long) <= BoardModel::SEARCH_MAX && preg_match('//u', $long) === 1);
+
+$searchCtx = array_merge($pickerCtx, array('search' => true, 'task_search' => array(1 => array('#7 <i>x</i>'))));
+$html = BoardRenderer::render(BoardModel::build($statuses, array(row(1, 1, 0, array('subject' => 'A "q" <b>')))), $searchCtx);
+check('search: field rendered hidden until board.js shows it', strpos($html, '<div class="spb-search" role="search" hidden') !== false
+    && strpos($html, 'id="spb-search-input"') !== false);
+check('search: data-search escaped, task line included', strpos($html, 'data-search="#000001&#10;') === false
+    && strpos($html, 'A &quot;q&quot; &lt;b&gt;') !== false && strpos($html, '#7 &lt;i&gt;x&lt;/i&gt;') !== false
+    && strpos($html, '<b>') === false && strpos($html, '<i>x') === false);
+check('search: agent board links osTicket search', strpos($html, 'data-search-url="/scp/tickets.php"') !== false
+    && strpos($html, 'class="spb-search-more"') !== false);
+check('search: truncated board flagged for the link', strpos(BoardRenderer::render(BoardModel::build($statuses, array()),
+    array_merge($searchCtx, array('truncated' => true))), 'data-truncated="1"') !== false);
+$html = BoardRenderer::render(BoardModel::build($statuses, array(row(1, 1, 0, array('email' => 'x@example.com')))),
+    array('mode' => 'client', 'ticket_url' => '/tickets.php?id=', 'strings' => $strings, 'closed_days' => 0,
+        'max_cards' => 300, 'truncated' => false, 'search' => true, 'task_search' => array(1 => array('#7 secret task'))));
+check('search: client board has the field, no agent search link, no tasks, no requester',
+    strpos($html, 'spb-search-input') !== false && strpos($html, 'spb-search-more') === false
+    && strpos($html, 'secret task') === false && strpos($html, 'Requester') === false && strpos($html, 'x@example.com') === false);
+check('search: off without the flag', strpos(BoardRenderer::render(BoardModel::build($statuses, array(row(1, 1))), $pickerCtx), 'data-search') === false);
+check('i18n: search, team and view strings in both languages', count(array_filter(array('search_count', 'search_more',
+    'team_all', 'team_none', 'views_group', 'view_save', 'view_invalid'), function ($k) {
+        return isset(BoardI18n::strings('en')[$k], BoardI18n::strings('de')[$k]);
+    })) === 7 && array_keys(BoardI18n::strings('en')) == array_keys(BoardI18n::strings('de')));
+
+// ------------------------------------------------------------- team filter
+
+$teamList = array(2 => 'Second line', 5 => 'Field <b>service</b>');
+check('teams: ids cleaned, sorted, unique, 0 kept', BoardPrefs::teamIds(array('5', '2', 5, '0', '-1', 'x', '1 OR 1', array(3), 2.5, '12345678901'))
+    === array(0, 2, 5));
+check('teams: not an array is no selection', BoardPrefs::teamIds('2,5') === array() && BoardPrefs::teamIds(null) === array());
+check('teams: capped', count(BoardPrefs::teamIds(range(1, 80))) === BoardPrefs::TEAM_MAX);
+check('teams: without team_set the stored selection applies', BoardPrefs::selectedTeams(array(), array(2), $teamList) === array(array(2), false));
+check('teams: team_set with boxes wins', BoardPrefs::selectedTeams(array('team_set' => '1', 'team' => array('5', '0')), array(2), $teamList)
+    === array(array(0, 5), true));
+check('teams: team_set without boxes means all teams', BoardPrefs::selectedTeams(array('team_set' => '1'), array(2), $teamList)
+    === array(array(), true));
+check('teams: unknown teams fall out', BoardPrefs::selectedTeams(array('team_set' => '1', 'team' => array('9', '2')), array(), $teamList)
+    === array(array(2), true) && BoardPrefs::selectedTeams(array(), array(9), $teamList) === array(array(), false));
+
+$teamCtx = array_merge($pickerCtx, array('teams' => $teamList, 'team_ids' => array(0, 5)));
+$html = BoardRenderer::render(BoardModel::build($statuses, array()), $teamCtx);
+check('teams: checkboxes inside the toolbar form, with team_set', preg_match('#<form class="spb-toolbar"[^>]*>.*name="team\[\]" value="5" checked.*name="team_set" value="1".*</form>#s', $html) === 1);
+check('teams: "without team" first, checked; others unchecked', strpos($html, 'value="0" checked> Without team') !== false
+    && strpos($html, 'value="2"> Second line') !== false
+    && strpos($html, 'name="team[]" value="0"') < strpos($html, 'name="team[]" value="2"'));
+check('teams: names escaped', strpos($html, 'Field &lt;b&gt;service&lt;/b&gt;') !== false && strpos($html, '<b>service') === false);
+check('teams: summary counts and marks an active filter', strpos($html, 'data-active="1"><summary aria-describedby="spb-teams-label">2 teams</summary>') !== false);
+$html = BoardRenderer::render(BoardModel::build($statuses, array()), array_merge($teamCtx, array('team_ids' => array())));
+check('teams: nothing picked reads "All teams"', strpos($html, '>All teams</summary>') !== false && strpos($html, 'data-active') === false);
+check('teams: no teams, no filter', strpos(BoardRenderer::render(BoardModel::build($statuses, array()), $pickerCtx), 'spb-teams') === false);
+
+// ----------------------------------------------------------- saved views
+
+check('views: name trimmed and collapsed', BoardPrefs::viewName("  My \t view ") === 'My view');
+check('views: empty, control characters, too long, invalid UTF-8 refused', BoardPrefs::viewName('  ') === null
+    && BoardPrefs::viewName("a\x07b") === null && BoardPrefs::viewName(str_repeat('ü', 61)) === null
+    && BoardPrefs::viewName(str_repeat('ü', 60)) === str_repeat('ü', 60) && BoardPrefs::viewName("\xC3\x28") === null
+    && BoardPrefs::viewName(array('x')) === null);
+
+$state = array('queue' => 4, 'teams' => array(0, 2), 'sort' => 'due', 'group' => 'agent');
+$prefs = BoardPrefs::decode(null);
+check('views: empty prefs', $prefs === array('teams' => array(), 'views' => array()));
+$prefs = BoardPrefs::withView($prefs, 'Mine', $state);
+check('views: saved with queue, teams, sort, group', $prefs['views'] === array(array('name' => 'Mine', 'queue' => 4,
+    'teams' => array(0, 2), 'sort' => 'due', 'group' => 'agent')));
+$prefs = BoardPrefs::withView($prefs, 'MINE', array_merge($state, array('sort' => 'number')));
+check('views: same name (any case) replaces', count($prefs['views']) === 1 && $prefs['views'][0]['sort'] === 'number'
+    && $prefs['views'][0]['name'] === 'MINE');
+check('views: invalid name not saved', BoardPrefs::withView($prefs, '', $state) === null);
+$full = BoardPrefs::decode(array('views' => array_map(function ($i) { return array('name' => "V$i"); }, range(1, 30))));
+check('views: stored list capped', count($full['views']) === BoardPrefs::VIEW_MAX);
+check('views: a full list takes no new name, still replaces', BoardPrefs::withView($full, 'New', $state) === null
+    && BoardPrefs::withView($full, 'V3', $state)['views'][2]['queue'] === 4);
+check('views: junk in storage cleaned', BoardPrefs::decode('{"teams":["2","x"],"views":[{"name":"<b>","queue":"7 OR 1","sort":"evil","group":"x","teams":"1"},{"queue":3},"x"]}')
+    === array('teams' => array(2), 'views' => array(array('name' => '<b>', 'queue' => 0, 'teams' => array(), 'sort' => 'updated', 'group' => ''))));
+check('views: broken JSON is empty prefs', BoardPrefs::decode('{nope') === array('teams' => array(), 'views' => array()));
+
+$views = $prefs['views'];
+check('views: ?queue=v0 stands for the view', BoardPrefs::resolveView(array('queue' => 'v0', 'team_set' => '1', 'team' => array('9')), $views)
+    === array('queue' => '4', 'team_set' => '1', 'team' => array('0', '2'), 'sort' => 'number', 'group' => 'agent'));
+check('views: unknown view goes to the default view', BoardPrefs::resolveView(array('queue' => 'v7'), $views) === array('queue' => 'all'));
+check('views: other values pass through', BoardPrefs::resolveView(array('queue' => '5'), $views) === array('queue' => '5')
+    && BoardPrefs::resolveView(array('queue' => 'v1234'), $views) === array('queue' => 'v1234')
+    && BoardPrefs::resolveView(array('queue' => array('v0')), $views) === array('queue' => array('v0')));
+check('views: matched against the board state', BoardPrefs::matchView($views, array_merge($state, array('sort' => 'number'))) === 0
+    && BoardPrefs::matchView($views, $state) === -1);
+check('views: delete by index, out of range ignored', BoardPrefs::withoutView($prefs, 0)['views'] === array()
+    && BoardPrefs::withoutView($prefs, 5) === $prefs);
+
+$viewCtx = array_merge($pickerCtx, array('views' => array(array('name' => 'Team <b>A</b>', 'queue' => 2, 'teams' => array(),
+    'sort' => 'updated', 'group' => '')), 'view_index' => 0, 'view_url' => '/scp/ajax.php/board/view',
+    'csrf_input' => '<input type="hidden" name="__CSRFToken__" value="abc" />'));
+$html = BoardRenderer::render(BoardModel::build($statuses, array()), $viewCtx);
+check('views: own group in the view select, matching view selected instead of its queue',
+    strpos($html, '<optgroup label="My views"><option value="v0" selected>Team &lt;b&gt;A&lt;/b&gt;</option></optgroup>') !== false
+    && strpos($html, '<option value="2">') !== false && substr_count($html, ' selected') === 1);
+check('views: save form posts with CSRF', preg_match('#<form method="post" action="/scp/ajax.php/board/view"><input type="hidden" name="__CSRFToken__" value="abc" /><input type="hidden" name="op" value="save">#', $html) === 1
+    && strpos($html, 'maxlength="60"') !== false);
+check('views: delete form for the shown view, name escaped', strpos($html, 'name="op" value="delete"><input type="hidden" name="view" value="0">') !== false
+    && strpos($html, 'Delete view &quot;Team &lt;b&gt;A&lt;/b&gt;&quot;') !== false);
+$html = BoardRenderer::render(BoardModel::build($statuses, array()), array_merge($viewCtx, array('view_index' => -1)));
+check('views: no delete form when no view is shown; queue stays selected', strpos($html, 'value="delete"') === false
+    && strpos($html, '<option value="v0">') !== false && strpos($html, '<option value="2" selected>') !== false);
+check('views: invalid-name notice once', strpos(BoardRenderer::render(BoardModel::build($statuses, array()),
+    array_merge($viewCtx, array('notice' => 'view_invalid'))), 'The view was not saved') !== false);
+
 echo "\n$count checks, $failures failed\n";
 exit($failures ? 1 : 0);

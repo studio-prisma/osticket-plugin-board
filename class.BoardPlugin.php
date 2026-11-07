@@ -10,7 +10,7 @@ declare(strict_types=1);
  *   Agent panel   Application::registerStaffApp() adds the entry under
  *                 "Applications". The ajax.scp signal of scp/ajax.php receives
  *                 /board, /board/move, /board/act, /board/state, /board/panel/{id},
- *                 /board/note and /board/assets/*.
+ *                 /board/note, /board/view and /board/assets/*.
  *   Start page    scp/index.php (logo, login without a target) is buffered and
  *                 answered with a redirect to the board once the agent is
  *                 known to be fully signed in (BoardLanding).
@@ -34,6 +34,7 @@ require_once INCLUDE_DIR . 'class.dispatcher.php';
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/src/BoardModel.php';
+require_once __DIR__ . '/src/BoardPrefs.php';
 require_once __DIR__ . '/src/BoardRenderer.php';
 require_once __DIR__ . '/src/BoardActions.php';
 require_once __DIR__ . '/src/BoardI18n.php';
@@ -145,6 +146,9 @@ class BoardPlugin extends Plugin
         }));
         $dispatcher->append(url_post('^/board/act$', static function () {
             return BoardController::staffAct();
+        }));
+        $dispatcher->append(url_post('^/board/view$', static function () {
+            return BoardController::staffSaveView();
         }));
         $dispatcher->append(url_get('^/board/assets/(board\.css|board\.js)$', static function ($name) {
             return BoardController::asset((string) $name);

@@ -106,6 +106,194 @@
   color: var(--spb-faint);
 }
 
+/* Team filter: a fold-out with checkboxes inside the toolbar. */
+.spb-teams-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--spb-muted);
+}
+
+.spb-teams {
+  position: relative;
+}
+
+.spb-teams > summary {
+  list-style: none;
+  cursor: pointer;
+  min-width: 160px;
+  padding: 5px 28px 5px 8px;
+  border-radius: 8px;
+  background: var(--spb-col-bg);
+  box-shadow: inset 0 0 0 0.5px var(--spb-border);
+  font-size: 13px;
+  position: relative;
+}
+
+.spb-teams > summary::-webkit-details-marker {
+  display: none;
+}
+
+.spb-teams > summary::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  opacity: 0.6;
+}
+
+.spb-teams[data-active] > summary {
+  box-shadow: inset 0 0 0 1.5px var(--spb-accent);
+  font-weight: 600;
+}
+
+.spb-teams > summary:focus-visible {
+  outline: 2px solid var(--spb-accent);
+  outline-offset: 2px;
+}
+
+.spb-teams-list {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 6px;
+  border-radius: var(--spb-radius);
+  background: var(--spb-drawer-solid);
+  box-shadow: var(--spb-shadow-raised);
+}
+
+.spb-toolbar .spb-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: var(--spb-text);
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.spb-toolbar .spb-team:hover {
+  background: var(--spb-fill);
+}
+
+.spb-team-none {
+  border-bottom: 0.5px solid var(--spb-border);
+  margin-bottom: 4px;
+}
+
+/* Saved views: save under a name, delete the current one. */
+.spb-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 16px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.spb-view-save > summary {
+  cursor: pointer;
+  color: var(--spb-accent);
+}
+
+.spb-view-save form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 6px;
+}
+
+.spb-view-save input[type="text"] {
+  min-width: 200px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--spb-col-bg);
+  box-shadow: inset 0 0 0 0.5px var(--spb-border);
+  color: var(--spb-text);
+  font: inherit;
+}
+
+.spb-view-save .spb-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.spb-view-delete button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--spb-muted);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Search ----------------------------------------------------------------- */
+
+.spb-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 0 0 12px;
+}
+
+.spb-search[hidden] {
+  display: none;
+}
+
+.spb-search-input {
+  flex: 0 1 420px;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--spb-col-bg);
+  box-shadow: inset 0 0 0 0.5px var(--spb-border);
+  color: var(--spb-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.spb-search-input:focus {
+  outline: 2px solid var(--spb-accent);
+  outline-offset: 1px;
+}
+
+.spb-search-count {
+  font-size: 13px;
+  color: var(--spb-muted);
+}
+
+.spb-search-count.spb-error {
+  color: var(--spb-overdue);
+}
+
+.spb-search-more {
+  font-size: 13px;
+}
+
+/* Hidden by the search. Cards and lanes set display themselves. */
+.spb-card[hidden],
+.spb-lane[hidden],
+.spb-search-more[hidden] {
+  display: none !important;
+}
+
 /* Status toast: feedback that doesn't push the board around. ----------- */
 
 .spb-status {
