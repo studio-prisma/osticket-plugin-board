@@ -15,7 +15,7 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 |---|---|---|
 | Wo | Applications → Board (`/scp/ajax.php/board`), und die Startseite des Panels: nach dem Login und über das Logo (Einstellung) | „Board" in der Portal-Navigation (`/ajax.php/board`) |
 | Welche Tickets | Genau das, was Abteilungen, Zuweisungen und Weiterleitungen des Agenten erlauben (`Staff::getTicketsVisibility()`, wie in den Queues) | Eigene Tickets, Tickets der Organisation, wenn die Organisation sie teilt, und Mitwirkungen, wenn aktiviert (dieselben drei Quellen wie die Ticketliste im Portal) |
-| Filter | Jede Queue und gespeicherte Suche des Agenten-Panels, über dem Board auswählbar, pro Sitzung gemerkt | Nein |
+| Filter | Jede Queue und gespeicherte Suche des Agenten-Panels, über dem Board auswählbar, pro Agent gemerkt, über Sitzungen und Browser hinweg | Nein |
 | Suche | Feld über dem Board, filtert die Karten beim Tippen: Ticketnummer, Aufgabennummer, Betreff, Name und Mail der anfragenden Person, Organisation, Abteilung, Zuweisung, Team, Unter-Tickets. `/` springt hinein, `Esc` leert es. Ohne Treffer oder wenn das Board am Kartenlimit abgeschnitten wurde, schickt ein Link dieselben Wörter an die Ticketsuche von osTicket | Dasselbe Feld, über Nummer, Betreff, Abteilung und Unter-Tickets |
 | Team-Filter | Mehrere Teams auf einmal, dazu „Ohne Team“, zusätzlich zur gewählten Ansicht und unabhängig von der Gruppierung. Pro Agent gemerkt, über Sitzungen und Browser hinweg | Nein |
 | Gespeicherte Ansichten | „Meine Ansichten“ in der Auswahl „Ansicht“: Queue, Team-Filter, Sortierung und Gruppierung unter einem Namen, im Board gespeichert und gelöscht. Jeder Agent sieht nur seine eigenen | Nein |
@@ -24,8 +24,8 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 | Aktionen | Ein Klick für Status, übernehmen, freigeben, als beantwortet markieren. Auswahllisten im Panel für Agent, Team, Abteilung und Priorität. Weiterleiten und Aufgabe anlegen öffnen die Dialoge von osTicket. Ein Statuswechsel lässt sich im Hinweis rückgängig machen | Nein |
 | Interne Notiz | Aus der Schnellansicht, als Klartext. Text im Notizfeld wird mit der nächsten Aktion gespeichert, die du anklickst | Nein |
 | Fälligkeit und Priorität | Markierungen für überfällig, heute fällig, morgen fällig sowie Priorität High/Emergency | Nein |
-| Sortierung | Zuletzt geändert, Fälligkeit, Priorität, neueste, Nummer; pro Sitzung gemerkt | Nein |
-| Gruppierung | Zeilen pro Organisation, zuständiger Person (oder Team) oder Abteilung, Spaltenköpfe mit Summen oben | Nein |
+| Sortierung | Zuletzt geändert, Fälligkeit, Priorität, neueste, Nummer; pro Agent gemerkt | Nein |
+| Gruppierung | Zeilen pro Organisation, zuständiger Person (oder Team) oder Abteilung, Spaltenköpfe mit Summen oben; pro Agent gemerkt | Nein |
 | Spaltenlimits | Optional pro Status; eine Spalte über ihrem Limit wird markiert | Nein |
 | Spaltenköpfe | Statusname oder ein Kürzel aus einer Eigenschaft der Statusliste (Einstellung), voller Name als Tooltip | Statusname |
 | Live-Aktualisierung | Änderungen von anderswo erscheinen von selbst, solange du nichts tust, oder hinter einem Button „Aktualisierungen anzeigen", während du arbeitest | Nein |
@@ -36,7 +36,7 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 
 **Die Filter sind die von osTicket, dazu ein Team-Filter und eine Suche.** Die Auswahl „Ansicht" listet die Queues und gespeicherten Suchen, die der Agent unter Tickets sieht, mit derselben Zugriffsprüfung (öffentliche Queues, eigene private Suchen, nie die eines anderen Agenten). Filter legt man an und speichert sie dort, wo man es gewohnt ist: Tickets, dann Suche, dann Speichern. Das Board übernimmt ihre Kriterien und dieselben Sichtbarkeitsregeln wie die Ticketliste. Unter-Tickets, die eine Queue als Zeilen ausblendet, erscheinen trotzdem eingeklappt unter dem Eltern-Ticket, beschränkt auf das, was der Agent sehen darf.
 
-Der Team-Filter engt das, was die Ansicht zeigt, auf Tickets ein, deren zugewiesenes Team zu den gewählten gehört: dieselbe Spalte wie das Suchkriterium „Assigned Team“ von osTicket. Er engt nur ein; die Sichtbarkeit des Agenten gilt zuerst. Die Auswahl liegt pro Agent in der Config-Tabelle von osTicket (Namespace `studio-prisma.board.staff.<id>`), ebenso die gespeicherten Ansichten. Eine gespeicherte Suche kann auch nach Team filtern, ersetzt aber die Queue und kann Sortierung und Gruppierung des Boards nicht speichern; der Team-Filter lässt sich mit jeder Ansicht kombinieren.
+Der Team-Filter engt das, was die Ansicht zeigt, auf Tickets der gewählten Teams ein: Tickets, deren zugewiesenes Team dazugehört (die Spalte des Suchkriteriums „Assigned Team“ von osTicket), und Tickets, die einem Mitglied eines dieser Teams persönlich zugewiesen sind (Admin Panel, Agents, Teams, Members). Er engt nur ein; die Sichtbarkeit des Agenten gilt zuerst. Die Auswahl liegt pro Agent in der Config-Tabelle von osTicket (Namespace `studio-prisma.board.staff.<id>`), zusammen mit der letzten Ansicht, Sortierung und Gruppierung und den gespeicherten Ansichten. Eine gespeicherte Suche kann auch nach Team filtern, ersetzt aber die Queue und kann Sortierung und Gruppierung des Boards nicht speichern; der Team-Filter lässt sich mit jeder Ansicht kombinieren.
 
 Die Suche verlässt den Browser nicht. Jede Karte trägt den Text, über den sie gefunden wird, serverseitig gerendert und escaped aus Feldern, die die betrachtende Person ohnehin sieht, und das Board blendet die Karten aus, die nicht jedes getippte Wort enthalten (Groß/klein und Akzente egal). Sie wirkt auf die geladenen Karten; Nachrichtentexte stehen nicht auf dem Board, dafür und für Tickets jenseits des Kartenlimits gibt der Link die Wörter an die Suche von osTicket weiter, die ihre eigenen Regeln anwendet.
 
@@ -124,7 +124,6 @@ Nicht geprüft: osTicket 1.17, Nginx, MySQL statt MariaDB, andere Portal-Themes 
 
 - **Eine Seite, kein Blättern.** Das Board zeigt höchstens „Maximum cards" Tickets, neueste Aktivität zuerst. Fehlen Tickets, erscheint ein Hinweis.
 - **Die Suche durchsucht nur die geladenen Karten**, weder Nachrichtentexte noch Tickets jenseits des Kartenlimits; der Link zur Suche von osTicket deckt beides ab. Spaltenzahlen bleiben während der Suche Gesamtzahlen (Limits beziehen sich auf die echte Last); die Zeile neben dem Feld nennt die Treffer.
-- **Team heißt zugewiesenes Team.** Tickets, die einem Teammitglied persönlich zugewiesen sind, zählen für den Team-Filter nicht, wie beim Kriterium „Assigned Team“ von osTicket.
 - **Gespeicherte Ansichten lassen sich nicht umbenennen oder teilen.** Speichern unter einem vorhandenen Namen ersetzt die Ansicht; bis zu 20 pro Agent.
 - **Eine verschobene Karte bleibt bis zum Neuladen.** Fällt ein Ticket durch den Statuswechsel aus der gewählten Queue (etwa beim Schließen in „Open"), bleibt die Karte bis zum Neuladen in ihrer neuen Spalte.
 - **Suchkriterien, die osTicket nicht unterstützt, werden ignoriert**, auf dem Board wie in der Ticketliste. Das ist das Verhalten von osTicket bei gespeicherten Suchen, kein Filter des Plugins.

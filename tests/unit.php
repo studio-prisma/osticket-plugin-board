@@ -659,7 +659,7 @@ check('views: empty, control characters, too long, invalid UTF-8 refused', Board
 
 $state = array('queue' => 4, 'teams' => array(0, 2), 'sort' => 'due', 'group' => 'agent');
 $prefs = BoardPrefs::decode(null);
-check('views: empty prefs', $prefs === array('teams' => array(), 'views' => array()));
+check('views: empty prefs', $prefs === array('queue' => 0, 'sort' => '', 'group' => '', 'teams' => array(), 'views' => array()));
 $prefs = BoardPrefs::withView($prefs, 'Mine', $state);
 check('views: saved with queue, teams, sort, group', $prefs['views'] === array(array('name' => 'Mine', 'queue' => 4,
     'teams' => array(0, 2), 'sort' => 'due', 'group' => 'agent')));
@@ -672,8 +672,8 @@ check('views: stored list capped', count($full['views']) === BoardPrefs::VIEW_MA
 check('views: a full list takes no new name, still replaces', BoardPrefs::withView($full, 'New', $state) === null
     && BoardPrefs::withView($full, 'V3', $state)['views'][2]['queue'] === 4);
 check('views: junk in storage cleaned', BoardPrefs::decode('{"teams":["2","x"],"views":[{"name":"<b>","queue":"7 OR 1","sort":"evil","group":"x","teams":"1"},{"queue":3},"x"]}')
-    === array('teams' => array(2), 'views' => array(array('name' => '<b>', 'queue' => 0, 'teams' => array(), 'sort' => 'updated', 'group' => ''))));
-check('views: broken JSON is empty prefs', BoardPrefs::decode('{nope') === array('teams' => array(), 'views' => array()));
+    === array('queue' => 0, 'sort' => '', 'group' => '', 'teams' => array(2), 'views' => array(array('name' => '<b>', 'queue' => 0, 'teams' => array(), 'sort' => 'updated', 'group' => ''))));
+check('views: broken JSON is empty prefs', BoardPrefs::decode('{nope') === BoardPrefs::decode(null));
 
 $views = $prefs['views'];
 check('views: ?queue=v0 stands for the view', BoardPrefs::resolveView(array('queue' => 'v0', 'team_set' => '1', 'team' => array('9')), $views)
@@ -704,5 +704,26 @@ check('views: no delete form when no view is shown; queue stays selected', strpo
 check('views: invalid-name notice once', strpos(BoardRenderer::render(BoardModel::build($statuses, array()),
     array_merge($viewCtx, array('notice' => 'view_invalid'))), 'The view was not saved') !== false);
 
+
+// ------------------------------------------- remembered queue, sort, group
+
+$p = BoardPrefs::decode('{"queue":"12","sort":"due","group":"agent","teams":[3]}');
+check('memory: stored queue, sort, group decoded', $p['queue'] === 12 && $p['sort'] === 'due' && $p['group'] === 'agent');
+check('memory: junk falls back to the defaults', BoardPrefs::decode('{"queue":"1 OR 1","sort":"<x>","group":["org"]}')
+    === BoardPrefs::decode(null));
+$mem = BoardPrefs::memory($p);
+check('memory: read by the same rules as before', BoardController::selectedQueueId(array(), $mem) === 12
+    && BoardController::selectedOption(array(), $mem, 'sort', BoardModel::SORTS) === 'due'
+    && BoardController::selectedOption(array(), $mem, 'group', BoardModel::GROUPS) === 'agent');
+check('memory: nothing chosen, board defaults', BoardPrefs::memory(BoardPrefs::decode(null)) === array());
+$mem = BoardPrefs::memory($p);
+BoardController::selectedQueueId(array('queue' => 'all'), $mem);
+BoardController::selectedOption(array('sort' => 'number'), $mem, 'sort', BoardModel::SORTS);
+$back = BoardPrefs::withMemory($p, $mem);
+check('memory: a new choice goes back into the prefs, the rest stays', $back['queue'] === 0 && $back['sort'] === 'number'
+    && $back['group'] === 'agent' && $back['teams'] === array(3));
+check('memory: unchanged choice, unchanged prefs (no write)', BoardPrefs::withMemory($p, BoardPrefs::memory($p)) === $p);
+check('memory: junk in memory not stored', BoardPrefs::withMemory($p, array('spb:staff_queue' => '-1', 'spb:staff_sort' => 'x'))
+    === array_merge($p, array('queue' => 0, 'sort' => '', 'group' => '')));
 echo "\n$count checks, $failures failed\n";
 exit($failures ? 1 : 0);

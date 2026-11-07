@@ -91,7 +91,7 @@ As the **non-admin** test agent:
 | 4.11 | Post an internal note with `<b>test</b>` | Note in the ticket view as literal text, not bold; not visible in the client portal |
 | 4.14 | Type a ticket number into the search field above the board, then the number of a task, then a word from a subject | Only the matching cards stay, a line says "x of y tickets"; `Esc` brings all back |
 | 4.15 | Search for a number of a ticket the agent can't see | "No ticket on the board matches." and a link to osTicket's search; the card isn't on the page |
-| 4.16 | Team filter: tick two teams, close the fold-out; log out and in again | Only tickets of those teams, in every grouping; the selection is still set |
+| 4.16 | Team filter: tick two teams, close the fold-out; pick a queue, sort and grouping; log out and in again | Tickets of those teams and tickets assigned to their members, in every grouping; after logging in again, teams, queue, sort and grouping are still set |
 | 4.17 | "Save view" with a name, switch to another view, pick it from "My views", then delete it | Queue, teams, sort and grouping come back as saved; after deleting, the name is gone and the board stays |
 
 Stop if: 4.3 shows a ticket the agent can't open in the normal ticket view. Disable the instance and report it (see SECURITY.md).
@@ -137,8 +137,8 @@ The end-to-end suite in `tests/e2e/` runs all of these against a local instance.
 
 ## Updating
 
-Replace the folder `include/plugins/board/` with the new release. Settings live in osTicket's config table and stay. Team filters and saved views of each agent live there too (namespace `studio-prisma.board.staff.<id>`). Read the CHANGELOG first: a major version bump means a changed behaviour or setting.
+Replace the folder `include/plugins/board/` with the new release. Settings live in osTicket's config table and stay. Each agent's last view, sort, grouping and team filter and their saved views live there too (namespace `studio-prisma.board.staff.<id>`). Read the CHANGELOG first: a major version bump means a changed behaviour or setting.
 
 ## Uninstalling
 
-Admin Panel → Plugins → Ticket Board → Delete, then remove `include/plugins/board/`. What stays are the agents' team filters and saved views, one row per agent in the config table; remove them with `DELETE FROM <prefix>config WHERE namespace LIKE 'studio-prisma.board.staff.%'` (`<prefix>` is usually `ost_`).
+Admin Panel → Plugins → Ticket Board → Delete, then remove `include/plugins/board/`. What stays are the agents' board preferences (last view, sort, grouping, team filter, saved views), one row per agent in the config table; remove them with `DELETE FROM <prefix>config WHERE namespace LIKE 'studio-prisma.board.staff.%'` (`<prefix>` is usually `ost_`).

@@ -38,7 +38,7 @@ Expected response: an acknowledgement within 7 days, an assessment within 30. Th
 - **An action button that opens a core dialog the agent's role doesn't allow** and the dialog then accepts.
 - **`/board/act` doing what the core dialog would refuse:** an action without the role permission, an assignee, team, department or priority the core dialog wouldn't list, an action on a ticket the agent can't open, or a request without a valid CSRF token that changes anything.
 - **The team filter, the search or a saved view showing a ticket** the agent couldn't see without them.
-- **Reaching another agent's saved views or team filter**, or saving or deleting a view without a valid CSRF token (`/scp/ajax.php/board/view`).
+- **Reaching another agent's saved views or board preferences** (team filter, last view, sort, grouping), or saving or deleting a view without a valid CSRF token (`/scp/ajax.php/board/view`).
 - **Search text on a card (`data-search`) carrying agent-only fields on the client board**, or being rendered as markup.
 
 ## Out of Scope

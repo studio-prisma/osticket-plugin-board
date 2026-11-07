@@ -112,11 +112,35 @@ final class BoardQuery
     }
 
     /**
-     * Narrows a ticket query to the assigned teams in $teams (0 = no team),
-     * the same column osTicket's "Assigned Team" search uses. Only ever
-     * added on top of the visibility filter, so it can't widen anything.
-     * The IDs were checked against teamOptions() by the caller and are
-     * bound as parameters by the ORM.
+     * Agents who are members of any of these teams (Admin Panel, Agents,
+     * Teams, Members).
+     *
+     * @param int[] $teamIds  > 0
+     * @return int[]
+     */
+    public static function teamMemberIds(array $teamIds): array
+    {
+        if (!$teamIds || !class_exists('TeamMember')) {
+            return array();
+        }
+        $out = array();
+        foreach (TeamMember::objects()->filter(array('team_id__in' => $teamIds))->values_flat('staff_id') as $row) {
+            if ((int) $row[0] > 0) {
+                $out[(int) $row[0]] = true;
+            }
+        }
+        $ids = array_keys($out);
+        sort($ids);
+        return $ids;
+    }
+
+    /**
+     * Narrows a ticket query to the teams in $teams: tickets assigned to one
+     * of the teams (the column osTicket's "Assigned Team" search uses) or to
+     * a member of one of them personally. 0 = tickets without a team. Only
+     * ever added on top of the visibility filter, so it can't widen
+     * anything. The IDs were checked against teamOptions() by the caller and
+     * are bound as parameters by the ORM.
      *
      * @param int[] $teams  empty = no filter
      */
@@ -132,6 +156,10 @@ final class BoardQuery
         }));
         if ($ids) {
             $any[] = new Q(array('team_id__in' => $ids));
+            $members = self::teamMemberIds($ids);
+            if ($members) {
+                $any[] = new Q(array('staff_id__in' => $members));
+            }
         }
         if (in_array(BoardPrefs::NO_TEAM, $teams, true)) {
             $any[] = new Q(array('team_id' => 0));

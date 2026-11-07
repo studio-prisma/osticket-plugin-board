@@ -15,7 +15,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 |---|---|---|
 | Where | Applications → Board (`/scp/ajax.php/board`), and the panel's start page: after login and on the logo (setting) | "Board" in the portal navigation (`/ajax.php/board`) |
 | Which tickets | Exactly what the agent's departments, assignments and referrals allow (`Staff::getTicketsVisibility()`, same as the queues) | Own tickets, organisation tickets if the organisation shares them, collaborations if enabled (same three sources as the portal's ticket list) |
-| Filter | Any queue or saved search of the agent panel, picked above the board, remembered per session | No |
+| Filter | Any queue or saved search of the agent panel, picked above the board, remembered per agent across sessions and browsers | No |
 | Search | Field above the board, filters the cards as you type: ticket number, task number, subject, requester name and email, organisation, department, assignee, team, sub-tickets. `/` jumps into it, `Esc` clears it. With no match, or when the board was cut at its card limit, a link runs the same words through osTicket's ticket search | Same field, over number, subject, department and sub-tickets |
 | Team filter | Several teams at once, plus "Without team", on top of the selected view and independent of the grouping. Remembered per agent, across sessions and browsers | No |
 | Saved views | "My views" in the View picker: queue, team filter, sort and grouping under a name, saved and deleted on the board. Each agent sees only their own | No |
@@ -24,8 +24,8 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 | Actions | One click for status, claim, release, mark answered. Pickers in the panel for agent, team, department and priority. Refer and add task open osTicket's dialogs. A status change can be undone from the toast | No |
 | Internal note | From the quick view, as plain text. Text in the note field is saved with whichever action you click next | No |
 | Due and priority | Tags for overdue, due today, due tomorrow, and High/Emergency priority | No |
-| Sort | Last updated, due date, priority, newest, number; remembered per session | No |
-| Group | Rows per organisation, assignee (or team) or department, column heads with totals on top | No |
+| Sort | Last updated, due date, priority, newest, number; remembered per agent | No |
+| Group | Rows per organisation, assignee (or team) or department, column heads with totals on top; remembered per agent | No |
 | Column limits | Optional per status; a column over its limit is marked | No |
 | Column heads | Status name, or a short form from a status list property (setting), full name as tooltip | Status name |
 | Live refresh | Changes made elsewhere appear by themselves while you're idle, or behind a "Show updates" button while you're working | No |
@@ -36,7 +36,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 
 **Filters are osTicket's own, plus a team filter and a search.** The "View" picker lists the queues and saved searches the agent sees under Tickets, with the same access check (public queues, own private searches, never another agent's). Filters are created and saved where they always are: Tickets, then Search, then Save. The board applies their criteria and the same visibility rules as the ticket list. Sub-tickets the queue hides as rows still show up folded under their parent, limited to what the agent may see.
 
-The team filter narrows whatever the view shows to tickets whose assigned team is one of the picked teams, the same column as osTicket's "Assigned Team" search criterion. It only narrows; the agent's visibility applies first. The selection is stored per agent in osTicket's config table (namespace `studio-prisma.board.staff.<id>`), as are saved views. A saved search can filter by team too, but it replaces the queue and can't hold the board's sort and grouping; the team filter combines with any view.
+The team filter narrows whatever the view shows to tickets of the picked teams: tickets whose assigned team is one of them (the column of osTicket's "Assigned Team" search criterion), and tickets assigned personally to a member of one of them (Admin Panel, Agents, Teams, Members). It only narrows; the agent's visibility applies first. The selection is stored per agent in osTicket's config table (namespace `studio-prisma.board.staff.<id>`), together with the last view, sort and grouping and the saved views. A saved search can filter by team too, but it replaces the queue and can't hold the board's sort and grouping; the team filter combines with any view.
 
 The search never leaves the browser. Each card carries the text it can be found by, rendered and escaped on the server from fields the viewer already sees, and the board hides the cards that don't contain every word typed (case and accents don't matter). It works on the cards the board loaded; message text isn't on the board, so for that and for tickets beyond the card limit the link hands the words to osTicket's own search, which applies its own rules.
 
@@ -124,7 +124,6 @@ Not verified: osTicket 1.17, Nginx, MySQL instead of MariaDB, other portal theme
 
 - **One page, no paging.** The board shows at most "Maximum cards" tickets, newest activity first. A notice appears when tickets were left out.
 - **The search covers the loaded cards only**, not message text and not tickets beyond the card limit; the link to osTicket's search covers both. Column counts stay totals while searching (limits are about the real load); the line next to the field says how many cards match.
-- **Team means assigned team.** Tickets assigned to a team member personally don't count for the team filter, as in osTicket's "Assigned Team" criterion.
 - **Saved views can't be renamed or shared.** Saving under an existing name replaces that view; up to 20 per agent.
 - **A moved card stays until reload.** If a status change takes a ticket out of the selected queue (say, closing it in "Open"), the card stays in its new column until the page is reloaded.
 - **Search criteria osTicket doesn't support are ignored**, on the board as in the ticket list. That's osTicket's behaviour for saved searches, not a filter of the plugin.

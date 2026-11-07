@@ -24,6 +24,7 @@ test.beforeAll(() => {
 test.afterAll(() => {
   sql('UPDATE ost_ticket SET team_id=0');
   sql(`UPDATE ost_task SET number='${seed.tasks.T2}' WHERE id=${seed.tasks.T2}`);
+  sql(`DELETE FROM ost_team_member WHERE team_id=${secondTeam}`);
   sql("DELETE FROM ost_team WHERE name='Second Line'");
   sql("DELETE FROM ost_config WHERE namespace LIKE 'studio-prisma.board.staff.%'");
 });
@@ -162,7 +163,7 @@ test.describe('team filter and saved views, as admin', () => {
     // A fresh browser context: new session, same agent.
     const other = await browser.newContext();
     const p2 = await other.newPage();
-    await staffLogin(p2, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
+    await staffLogin(p2, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS, { keepPrefs: true });
     await openBoard(p2, 'queue=all');
     expect(await onBoard(p2)).toEqual([n.G1]);
     await expect(p2.locator('.spb-teams > summary')).toHaveText('Second Line');
@@ -172,6 +173,44 @@ test.describe('team filter and saved views, as admin', () => {
     await openBoard(page, 'team_set=1');
     await expect(page.locator('.spb-teams > summary')).toHaveText('All teams');
     expect((await onBoard(page)).length).toBeGreaterThan(1);
+  });
+
+  test('queue, sort and grouping are kept per agent too', async ({ page, browser }) => {
+    await openBoard(page, `queue=${seed.searches.acme}&sort=number&group=org`);
+
+    const other = await browser.newContext();
+    const p2 = await other.newPage();
+    await staffLogin(p2, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS, { keepPrefs: true });
+    await p2.goto('/scp/ajax.php/board');
+    await p2.locator('.spb-board').waitFor();
+    await expect(p2.locator('#spb-queue')).toHaveValue(String(seed.searches.acme));
+    await expect(p2.locator('#spb-sort')).toHaveValue('number');
+    await expect(p2.locator('#spb-group')).toHaveValue('org');
+    await other.close();
+
+    // The live-refresh check reads them but stores nothing.
+    await page.evaluate(() => fetch('/scp/ajax.php/board/state?queue=all'));
+    await page.goto('/scp/ajax.php/board');
+    await page.locator('.spb-board').waitFor();
+    await expect(page.locator('#spb-queue')).toHaveValue(String(seed.searches.acme));
+    await openBoard(page, 'queue=all&sort=updated&group=');
+  });
+
+  test('a team also brings in tickets assigned to its members personally', async ({ page }) => {
+    const admin = Number(sql(`SELECT staff_id FROM ost_staff WHERE username='${env.SPB_ADMIN_USER}'`).trim().split(/\s+/).pop());
+    await openBoard(page, 'queue=all&group=&team_set=1');
+    const all = await onBoard(page);
+    sql(`INSERT INTO ost_team_member (team_id, staff_id, flags) VALUES (${secondTeam}, ${admin}, 0)`);
+    try {
+      await openBoard(page, `team_set=1&team[]=${secondTeam}`);
+      // G1 by its team; A1, A5 and S1 because they are assigned to the admin, now a member.
+      const expected = all.filter((x) => [n.G1, n.A1, n.A5, n.S1].includes(x));
+      expect(expected).toEqual(expect.arrayContaining([n.G1, n.A5]));
+      expect(await onBoard(page)).toEqual(expected);
+    } finally {
+      sql(`DELETE FROM ost_team_member WHERE team_id=${secondTeam}`);
+    }
+    await openBoard(page, 'team_set=1');
   });
 
   test('works on top of a queue or saved search', async ({ page }) => {

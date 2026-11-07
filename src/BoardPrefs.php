@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Per-agent board preferences: the last team filter and named views.
+ * Per-agent board preferences: the last queue, sort, grouping and team
+ * filter, and named views.
  *
  * Stored in osTicket's own config table under the namespace
  * "studio-prisma.board.staff.<staff id>", key "prefs", as JSON. No schema of
@@ -30,7 +31,7 @@ final class BoardPrefs
     private const NAMESPACE_PREFIX = 'studio-prisma.board.staff.';
     private const KEY = 'prefs';
 
-    /** @return array{teams:int[], views:array} */
+    /** @return array{queue:int, sort:string, group:string, teams:int[], views:array} */
     public static function load(int $staffId): array
     {
         $config = self::config($staffId);
@@ -57,7 +58,7 @@ final class BoardPrefs
      * dropped, so a broken row never breaks the board.
      *
      * @param mixed $raw
-     * @return array{teams:int[], views:array}
+     * @return array{queue:int, sort:string, group:string, teams:int[], views:array}
      */
     public static function decode($raw): array
     {
@@ -74,10 +75,56 @@ final class BoardPrefs
                 $views[] = $view;
             }
         }
+        $sort = $raw['sort'] ?? '';
+        $group = $raw['group'] ?? '';
         return array(
+            'queue' => self::queueId($raw['queue'] ?? 0),
+            // '' = never chosen, the board's default applies.
+            'sort'  => is_string($sort) && in_array($sort, BoardModel::SORTS, true) ? $sort : '',
+            'group' => is_string($group) && in_array($group, BoardModel::GROUPS, true) ? $group : '',
             'teams' => self::teamIds($raw['teams'] ?? array()),
             'views' => $views,
         );
+    }
+
+    /** @param mixed $raw */
+    private static function queueId($raw): int
+    {
+        return is_int($raw) || (is_string($raw) && $raw !== '' && strlen($raw) <= 10 && ctype_digit($raw))
+            ? max(0, (int) $raw) : 0;
+    }
+
+    /**
+     * The remembered queue, sort and grouping as the keys that
+     * BoardController::selectedQueueId() and selectedOption() read and
+     * write, so the same rules apply as before, only stored per agent.
+     *
+     * @return array<string, int|string>
+     */
+    public static function memory(array $prefs): array
+    {
+        $mem = array();
+        if ($prefs['queue'] > 0) {
+            $mem['spb:staff_queue'] = $prefs['queue'];
+        }
+        if ($prefs['sort'] !== '') {
+            $mem['spb:staff_sort'] = $prefs['sort'];
+        }
+        if ($prefs['group'] !== '') {
+            $mem['spb:staff_group'] = $prefs['group'];
+        }
+        return $mem;
+    }
+
+    /** memory() back into the preferences. */
+    public static function withMemory(array $prefs, array $mem): array
+    {
+        $prefs['queue'] = self::queueId($mem['spb:staff_queue'] ?? 0);
+        $sort = $mem['spb:staff_sort'] ?? '';
+        $group = $mem['spb:staff_group'] ?? '';
+        $prefs['sort'] = is_string($sort) && in_array($sort, BoardModel::SORTS, true) ? $sort : '';
+        $prefs['group'] = is_string($group) && in_array($group, BoardModel::GROUPS, true) ? $group : '';
+        return $prefs;
     }
 
     /** One stored view, or null if it has no usable name. */
@@ -92,8 +139,7 @@ final class BoardPrefs
         $group = $v['group'] ?? '';
         return array(
             'name'  => $name,
-            'queue' => is_int($queue) || (is_string($queue) && $queue !== '' && strlen($queue) <= 10 && ctype_digit($queue))
-                ? max(0, (int) $queue) : 0,
+            'queue' => self::queueId($queue),
             'teams' => self::teamIds($v['teams'] ?? array()),
             'sort'  => in_array($sort, BoardModel::SORTS, true) ? $sort : BoardModel::SORTS[0],
             'group' => in_array($group, BoardModel::GROUPS, true) ? $group : BoardModel::GROUPS[0],

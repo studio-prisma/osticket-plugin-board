@@ -185,26 +185,29 @@ final class BoardController
     private static function staffView(Staff $staff, array $get, bool $persist = true): array
     {
         $s = self::$settings;
-        if (!isset($_SESSION) || !is_array($_SESSION)) {
-            $_SESSION = array();
-        }
 
-        // Saved views and the team filter are kept per agent, beyond the
-        // session. ?queue=v<n> picks a saved view and stands for its parts.
+        // Queue, sort, grouping, team filter and saved views are kept per
+        // agent, beyond the session. ?queue=v<n> picks a saved view and
+        // stands for its parts.
         $prefs = BoardPrefs::load((int) $staff->getId());
         $get = BoardPrefs::resolveView($get, $prefs['views']);
         $teamOptions = BoardQuery::teamOptions();
-        list($teams, $fromRequest) = BoardPrefs::selectedTeams($get, $prefs['teams'], $teamOptions);
-        if ($persist && $fromRequest && $teams !== $prefs['teams']) {
-            $prefs['teams'] = $teams;
-            BoardPrefs::save((int) $staff->getId(), $prefs);
-        }
+        list($teams) = BoardPrefs::selectedTeams($get, $prefs['teams'], $teamOptions);
+        $mem = BoardPrefs::memory($prefs);
 
-        $queueId = self::selectedQueueId($get, $_SESSION);
+        $queueId = self::selectedQueueId($get, $mem);
         $queue = $queueId > 0 ? BoardQuery::queueFor($staff, $queueId) : null;
         if ($queueId > 0 && !$queue) {
             // Forget it, so the notice shows once and the next visit is clean.
-            unset($_SESSION[self::QUEUE_SESSION_KEY]);
+            unset($mem[self::QUEUE_KEY]);
+        }
+        $sort = self::selectedOption($get, $mem, 'sort', BoardModel::SORTS);
+        $group = self::selectedOption($get, $mem, 'group', BoardModel::GROUPS);
+
+        $next = BoardPrefs::withMemory($prefs, $mem);
+        $next['teams'] = $teams;
+        if ($persist && $next !== $prefs) {
+            BoardPrefs::save((int) $staff->getId(), $next);
         }
 
         if ($queue) {
@@ -217,8 +220,6 @@ final class BoardController
             $statuses = BoardQuery::statuses($s['closed_days'], $s['status_abbrev']);
         }
 
-        $sort = self::selectedOption($get, $_SESSION, 'sort', BoardModel::SORTS);
-        $group = self::selectedOption($get, $_SESSION, 'group', BoardModel::GROUPS);
         $state = array('queue' => $queue ? (int) $queue->getId() : 0, 'teams' => $teams, 'sort' => $sort, 'group' => $group);
 
         return array(
@@ -301,18 +302,16 @@ final class BoardController
      */
     private static function currentState(Staff $staff, array $prefs): array
     {
-        if (!isset($_SESSION) || !is_array($_SESSION)) {
-            $_SESSION = array();
-        }
         $none = array();
-        $queueId = self::selectedQueueId($none, $_SESSION);
+        $mem = BoardPrefs::memory($prefs);
+        $queueId = self::selectedQueueId($none, $mem);
         $queue = $queueId > 0 ? BoardQuery::queueFor($staff, $queueId) : null;
         list($teams) = BoardPrefs::selectedTeams($none, $prefs['teams'], BoardQuery::teamOptions());
         return array(
             'queue' => $queue ? (int) $queue->getId() : 0,
             'teams' => $teams,
-            'sort'  => self::selectedOption($none, $_SESSION, 'sort', BoardModel::SORTS),
-            'group' => self::selectedOption($none, $_SESSION, 'group', BoardModel::GROUPS),
+            'sort'  => self::selectedOption($none, $mem, 'sort', BoardModel::SORTS),
+            'group' => self::selectedOption($none, $mem, 'group', BoardModel::GROUPS),
         );
     }
 
@@ -358,42 +357,43 @@ final class BoardController
     }
 
     /**
-     * A remembered choice from a fixed list: ?<name>=<value> selects and
+     * A remembered choice from a fixed list (memory: BoardPrefs::memory(),
+     * kept per agent): ?<name>=<value> selects and
      * remembers it, an unknown value falls back to the first entry. Public
      * for the unit tests.
      */
-    public static function selectedOption(array $get, array &$session, string $name, array $allowed): string
+    public static function selectedOption(array $get, array &$memory, string $name, array $allowed): string
     {
         $key = 'spb:staff_' . $name;
         if (array_key_exists($name, $get)) {
             $value = is_string($get[$name]) && in_array($get[$name], $allowed, true) ? $get[$name] : $allowed[0];
-            $session[$key] = $value;
+            $memory[$key] = $value;
             return $value;
         }
-        $value = $session[$key] ?? $allowed[0];
+        $value = $memory[$key] ?? $allowed[0];
         return in_array($value, $allowed, true) ? $value : $allowed[0];
     }
 
-    public const QUEUE_SESSION_KEY = 'spb:staff_queue';
+    public const QUEUE_KEY = 'spb:staff_queue';
 
     /**
      * Which queue the board shows. ?queue=<id> selects and remembers it,
      * ?queue=all goes back to the default view; without the parameter the
      * remembered choice applies. Access is checked by the caller.
      */
-    public static function selectedQueueId(array $get, array &$session): int
+    public static function selectedQueueId(array $get, array &$memory): int
     {
         if (array_key_exists('queue', $get)) {
             $raw = is_string($get['queue']) ? $get['queue'] : '';
             $id = ctype_digit($raw) ? (int) $raw : 0;
             if ($id > 0) {
-                $session[self::QUEUE_SESSION_KEY] = $id;
+                $memory[self::QUEUE_KEY] = $id;
             } else {
-                unset($session[self::QUEUE_SESSION_KEY]);
+                unset($memory[self::QUEUE_KEY]);
             }
             return $id;
         }
-        return (int) ($session[self::QUEUE_SESSION_KEY] ?? 0);
+        return (int) ($memory[self::QUEUE_KEY] ?? 0);
     }
 
     public static function staffMove(): string

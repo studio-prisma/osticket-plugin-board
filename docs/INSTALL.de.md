@@ -91,7 +91,7 @@ Als **Nicht-Admin**-Testagent:
 | 4.11 | Interne Notiz mit `<b>test</b>` speichern | Notiz in der Ticketansicht als wörtlicher Text, nicht fett; im Kundenportal nicht sichtbar |
 | 4.14 | Eine Ticketnummer ins Suchfeld über dem Board tippen, dann die Nummer einer Aufgabe, dann ein Wort aus einem Betreff | Nur passende Karten bleiben, eine Zeile sagt „x von y Tickets“; `Esc` holt alle zurück |
 | 4.15 | Nach der Nummer eines Tickets suchen, das der Agent nicht sehen darf | „Kein Ticket auf dem Board passt.“ und ein Link zur Suche von osTicket; die Karte steht nicht in der Seite |
-| 4.16 | Team-Filter: zwei Teams anhaken, Auswahl schließen; ab- und wieder anmelden | Nur Tickets dieser Teams, in jeder Gruppierung; die Auswahl ist noch gesetzt |
+| 4.16 | Team-Filter: zwei Teams anhaken, Auswahl schließen; Queue, Sortierung und Gruppierung wählen; ab- und wieder anmelden | Tickets dieser Teams und Tickets, die ihren Mitgliedern zugewiesen sind, in jeder Gruppierung; nach dem Anmelden sind Teams, Queue, Sortierung und Gruppierung noch gesetzt |
 | 4.17 | „Ansicht speichern“ mit einem Namen, in eine andere Ansicht wechseln, unter „Meine Ansichten“ wählen, dann löschen | Queue, Teams, Sortierung und Gruppierung kommen wie gespeichert zurück; nach dem Löschen ist der Name weg, das Board bleibt |
 
 Abbruch, wenn: 4.3 ein Ticket zeigt, das der Agent in der normalen Ticketansicht nicht öffnen kann. Instanz deaktivieren und melden (siehe SECURITY.md).
@@ -137,8 +137,8 @@ Die End-to-End-Suite in `tests/e2e/` fährt alle Prüfungen gegen eine lokale In
 
 ## Aktualisieren
 
-Den Ordner `include/plugins/board/` durch das neue Release ersetzen. Die Einstellungen liegen in der Config-Tabelle von osTicket und bleiben erhalten. Team-Filter und gespeicherte Ansichten der Agenten liegen ebenfalls dort (Namespace `studio-prisma.board.staff.<id>`). Vorher das CHANGELOG lesen: Ein Major-Sprung bedeutet geändertes Verhalten oder eine geänderte Einstellung.
+Den Ordner `include/plugins/board/` durch das neue Release ersetzen. Die Einstellungen liegen in der Config-Tabelle von osTicket und bleiben erhalten. Letzte Ansicht, Sortierung, Gruppierung und Team-Filter jedes Agenten und seine gespeicherten Ansichten liegen ebenfalls dort (Namespace `studio-prisma.board.staff.<id>`). Vorher das CHANGELOG lesen: Ein Major-Sprung bedeutet geändertes Verhalten oder eine geänderte Einstellung.
 
 ## Deinstallieren
 
-Admin Panel → Plugins → Ticket Board → Delete, danach `include/plugins/board/` löschen. Zurück bleiben die Team-Filter und gespeicherten Ansichten der Agenten, eine Zeile pro Agent in der Config-Tabelle; entfernen mit `DELETE FROM <prefix>config WHERE namespace LIKE 'studio-prisma.board.staff.%'` (`<prefix>` meist `ost_`).
+Admin Panel → Plugins → Ticket Board → Delete, danach `include/plugins/board/` löschen. Zurück bleiben die Board-Einstellungen der Agenten (letzte Ansicht, Sortierung, Gruppierung, Team-Filter, gespeicherte Ansichten), eine Zeile pro Agent in der Config-Tabelle; entfernen mit `DELETE FROM <prefix>config WHERE namespace LIKE 'studio-prisma.board.staff.%'` (`<prefix>` meist `ost_`).
