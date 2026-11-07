@@ -37,6 +37,9 @@ Expected response: an acknowledgement within 7 days, an assessment within 30. Th
 - **An internal note from the board** on a ticket the agent can't open, without a valid CSRF token, from a client session, or rendered as markup anywhere.
 - **An action button that opens a core dialog the agent's role doesn't allow** and the dialog then accepts.
 - **`/board/act` doing what the core dialog would refuse:** an action without the role permission, an assignee, team, department or priority the core dialog wouldn't list, an action on a ticket the agent can't open, or a request without a valid CSRF token that changes anything.
+- **The team filter, the search or a saved view showing a ticket** the agent couldn't see without them.
+- **Reaching another agent's saved views or team filter**, or saving or deleting a view without a valid CSRF token (`/scp/ajax.php/board/view`).
+- **Search text on a card (`data-search`) carrying agent-only fields on the client board**, or being rendered as markup.
 
 ## Out of Scope
 
@@ -45,6 +48,8 @@ Documented design decisions are not findings.
 - **The client board shows what the portal shows.** Organisation sharing and collaborator visibility are osTicket settings. If they're on, organisation members see each other's tickets on the board, same as under "Tickets".
 - **Department names are visible to clients.** The portal's own ticket list shows them too.
 - **Ticket numbers and subjects on the agent board** for every ticket the agent's queues already list.
+- **Search text in the page source.** Each card carries the words it can be found by, taken from fields the same viewer already sees on the card, in the quick view or in the ticket view (for agents: requester email, task numbers and titles).
+- **Team names in the team filter.** Every assignment menu of the agent panel lists them.
 - **The output buffer on portal pages.** It's how the navigation entry gets in without a core patch. It is skipped for downloads, the API, AJAX and the agent panel.
 - **Bugs in osTicket itself**, including its visibility rules. Report those [upstream](https://github.com/osTicket/osTicket/security).
 - Anything that requires admin access to osTicket or write access to the server.

@@ -89,6 +89,10 @@ Als **Nicht-Admin**-Testagent:
 | 4.10c | Optional: einen Triage-Status unter „Next ticket from these columns" eintragen, dann bei einem Ticket in dieser Spalte den Status aus der Schnellansicht ändern | Die Schnellansicht öffnet die nächste Karte derselben Spalte; bei der letzten schließt sie sich mit „In … ist nichts mehr übrig." |
 | 4.10b | In der Schnellansicht eine Zeile ins Notizfeld schreiben, dann bei einem Testticket einen geschlossenen Status anklicken | Kein Dialog; das Ticket ist geschlossen, die Notiz steht im Verlauf, die Schnellansicht zeigt die nächste offene Karte. „Rückgängig" im Hinweis öffnet es wieder |
 | 4.11 | Interne Notiz mit `<b>test</b>` speichern | Notiz in der Ticketansicht als wörtlicher Text, nicht fett; im Kundenportal nicht sichtbar |
+| 4.14 | Eine Ticketnummer ins Suchfeld über dem Board tippen, dann die Nummer einer Aufgabe, dann ein Wort aus einem Betreff | Nur passende Karten bleiben, eine Zeile sagt „x von y Tickets“; `Esc` holt alle zurück |
+| 4.15 | Nach der Nummer eines Tickets suchen, das der Agent nicht sehen darf | „Kein Ticket auf dem Board passt.“ und ein Link zur Suche von osTicket; die Karte steht nicht in der Seite |
+| 4.16 | Team-Filter: zwei Teams anhaken, Auswahl schließen; ab- und wieder anmelden | Nur Tickets dieser Teams, in jeder Gruppierung; die Auswahl ist noch gesetzt |
+| 4.17 | „Ansicht speichern“ mit einem Namen, in eine andere Ansicht wechseln, unter „Meine Ansichten“ wählen, dann löschen | Queue, Teams, Sortierung und Gruppierung kommen wie gespeichert zurück; nach dem Löschen ist der Name weg, das Board bleibt |
 
 Abbruch, wenn: 4.3 ein Ticket zeigt, das der Agent in der normalen Ticketansicht nicht öffnen kann. Instanz deaktivieren und melden (siehe SECURITY.md).
 
@@ -123,6 +127,9 @@ Abbruch, wenn: 5.2 oder 5.4 ein Ticket zeigt, das der Kunde unter „Tickets" ni
 | Unsichtbares Ticket | Als Agent POST mit Ticket-ID aus fremder Abteilung | `404`, gleicher Body wie bei einer nicht existierenden ID |
 | Status außerhalb von offen/geschlossen | POST mit der ID von *Archived* oder *Deleted* | `422` |
 | Markup im Betreff | Ticket mit `<b>x</b>` im Betreff anlegen | Auf beiden Boards als Text |
+| Ansichten brauchen CSRF | Als Agent POST an `/scp/ajax.php/board/view` ohne Token | `400`, nichts gespeichert |
+| Ansichten bleiben privat | `/scp/ajax.php/board?queue=v0` als Agent ohne gespeicherte Ansichten öffnen | Standardansicht; die Ansicht eines anderen Agenten ist nicht erreichbar |
+| Team-Filter erweitert nichts | Als Agent ohne Zugriff auf eine Abteilung das Team eines Tickets von dort anhaken | Das Ticket erscheint nicht |
 
 Die End-to-End-Suite in `tests/e2e/` fährt alle Prüfungen gegen eine lokale Instanz.
 
@@ -130,8 +137,8 @@ Die End-to-End-Suite in `tests/e2e/` fährt alle Prüfungen gegen eine lokale In
 
 ## Aktualisieren
 
-Den Ordner `include/plugins/board/` durch das neue Release ersetzen. Die Einstellungen liegen in der Config-Tabelle von osTicket und bleiben erhalten. Vorher das CHANGELOG lesen: Ein Major-Sprung bedeutet geändertes Verhalten oder eine geänderte Einstellung.
+Den Ordner `include/plugins/board/` durch das neue Release ersetzen. Die Einstellungen liegen in der Config-Tabelle von osTicket und bleiben erhalten. Team-Filter und gespeicherte Ansichten der Agenten liegen ebenfalls dort (Namespace `studio-prisma.board.staff.<id>`). Vorher das CHANGELOG lesen: Ein Major-Sprung bedeutet geändertes Verhalten oder eine geänderte Einstellung.
 
 ## Deinstallieren
 
-Admin Panel → Plugins → Ticket Board → Delete, danach `include/plugins/board/` löschen. Es bleibt nichts zurück.
+Admin Panel → Plugins → Ticket Board → Delete, danach `include/plugins/board/` löschen. Zurück bleiben die Team-Filter und gespeicherten Ansichten der Agenten, eine Zeile pro Agent in der Config-Tabelle; entfernen mit `DELETE FROM <prefix>config WHERE namespace LIKE 'studio-prisma.board.staff.%'` (`<prefix>` meist `ost_`).
