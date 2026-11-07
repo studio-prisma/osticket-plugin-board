@@ -134,6 +134,7 @@ final class BoardController
             ? BoardModel::lanes($board, $view['group'], $strings['lane_none_' . $view['group']])
             : null;
         $base = ROOT_PATH . BoardPlugin::STAFF_BASE;
+        $tasks = self::taskIndex(array_column($view['result']['rows'], 'id'), $thisstaff);
 
         $html = BoardRenderer::render($board, array(
             'mode'          => 'staff',
@@ -158,7 +159,16 @@ final class BoardController
             'lanes'         => $lanes,
             'limits'        => BoardModel::parseLimits($s['wip_limits'], $view['statuses']),
             'now'           => BoardQuery::dbNow(),
-            'open_tasks'    => self::openTaskCounts(array_column($view['result']['rows'], 'id'), $thisstaff),
+            'open_tasks'    => $tasks['open'],
+            'task_search'   => $tasks['search'],
+            'search'        => true,
+            'teams'         => $view['team_options'],
+            'team_ids'      => $view['teams'],
+            'views'         => $view['views'],
+            'view_index'    => $view['view_index'],
+            'view_url'      => $base . '/view',
+            'csrf_input'    => self::csrfInput(),
+            'notice'        => self::takeNotice(),
             'refresh_url'   => $s['refresh_seconds'] > 0 ? $base . '/state' : '',
             'refresh_seconds' => $s['refresh_seconds'],
             'signature'     => BoardModel::signature($view['result']['rows']),
@@ -172,37 +182,154 @@ final class BoardController
      * Everything that decides which tickets the agent board shows, shared by
      * the page and the live-refresh check so both always agree.
      */
-    private static function staffView(Staff $staff, array $get): array
+    private static function staffView(Staff $staff, array $get, bool $persist = true): array
     {
         $s = self::$settings;
-        if (!isset($_SESSION) || !is_array($_SESSION)) {
-            $_SESSION = array();
-        }
-        $queueId = self::selectedQueueId($get, $_SESSION);
+
+        // Queue, sort, grouping, team filter and saved views are kept per
+        // agent, beyond the session. ?queue=v<n> picks a saved view and
+        // stands for its parts.
+        $prefs = BoardPrefs::load((int) $staff->getId());
+        $get = BoardPrefs::resolveView($get, $prefs['views']);
+        $teamOptions = BoardQuery::teamOptions();
+        list($teams) = BoardPrefs::selectedTeams($get, $prefs['teams'], $teamOptions);
+        $mem = BoardPrefs::memory($prefs);
+
+        $queueId = self::selectedQueueId($get, $mem);
         $queue = $queueId > 0 ? BoardQuery::queueFor($staff, $queueId) : null;
         if ($queueId > 0 && !$queue) {
             // Forget it, so the notice shows once and the next visit is clean.
-            unset($_SESSION[self::QUEUE_SESSION_KEY]);
+            unset($mem[self::QUEUE_KEY]);
+        }
+        $sort = self::selectedOption($get, $mem, 'sort', BoardModel::SORTS);
+        $group = self::selectedOption($get, $mem, 'group', BoardModel::GROUPS);
+
+        $next = BoardPrefs::withMemory($prefs, $mem);
+        $next['teams'] = $teams;
+        if ($persist && $next !== $prefs) {
+            BoardPrefs::save((int) $staff->getId(), $next);
         }
 
         if ($queue) {
             // The queue's criteria decide which states show up, so the closed
             // window of the default view doesn't apply; closed columns stay.
-            $result = BoardQuery::forStaffQueue($staff, $queue, $s['max_cards']);
+            $result = BoardQuery::forStaffQueue($staff, $queue, $s['max_cards'], $teams);
             $statuses = BoardQuery::statuses(max(1, $s['closed_days']), $s['status_abbrev']);
         } else {
-            $result = BoardQuery::forStaff($staff, $s['closed_days'], $s['max_cards']);
+            $result = BoardQuery::forStaff($staff, $s['closed_days'], $s['max_cards'], $teams);
             $statuses = BoardQuery::statuses($s['closed_days'], $s['status_abbrev']);
         }
+
+        $state = array('queue' => $queue ? (int) $queue->getId() : 0, 'teams' => $teams, 'sort' => $sort, 'group' => $group);
 
         return array(
             'queue'         => $queue,
             'queue_missing' => $queueId > 0 && !$queue,
             'result'        => $result,
             'statuses'      => $statuses,
-            'sort'          => self::selectedOption($get, $_SESSION, 'sort', BoardModel::SORTS),
-            'group'         => self::selectedOption($get, $_SESSION, 'group', BoardModel::GROUPS),
+            'sort'          => $sort,
+            'group'         => $group,
+            'teams'         => $teams,
+            'team_options'  => $teamOptions,
+            'views'         => $prefs['views'],
+            'view_index'    => BoardPrefs::matchView($prefs['views'], $state),
+            'state'         => $state,
         );
+    }
+
+    /**
+     * Saves the view the agent is looking at under a name, or deletes a
+     * saved view. Writes only to the agent's own preferences (BoardPrefs),
+     * never to a ticket; no core dialog stores board settings. A plain form
+     * POST, answered with a redirect back to the board.
+     */
+    public static function staffSaveView(): string
+    {
+        global $thisstaff, $ost;
+
+        header('Cache-Control: no-store');
+        if (!self::$settings['enable_staff'] || !($thisstaff instanceof Staff)) {
+            Http::response(404, 'Not found');
+            exit;
+        }
+        if (self::staffGated($thisstaff)) {
+            Http::redirect(ROOT_PATH . 'scp/index.php');
+            exit;
+        }
+        if (!$ost || !$ost->checkCSRFToken()) {
+            Http::response(400, 'Invalid request');
+            exit;
+        }
+
+        $sid = (int) $thisstaff->getId();
+        $prefs = BoardPrefs::load($sid);
+        $op = is_string($_POST['op'] ?? null) ? $_POST['op'] : '';
+        $target = 'all';
+
+        if ($op === 'save') {
+            // What the board shows right now: remembered queue, sort, group
+            // and teams, through the same rules as the page.
+            $state = self::currentState($thisstaff, $prefs);
+            $name = $_POST['name'] ?? '';
+            $next = BoardPrefs::withView($prefs, is_string($name) ? $name : '', $state);
+            if ($next === null) {
+                $_SESSION[self::NOTICE_SESSION_KEY] = 'view_invalid';
+            } else {
+                BoardPrefs::save($sid, $next);
+                $saved = BoardPrefs::matchView($next['views'], $state);
+                $target = $saved >= 0 ? 'v' . $saved : 'all';
+            }
+        } elseif ($op === 'delete') {
+            $raw = is_string($_POST['view'] ?? null) ? $_POST['view'] : '';
+            if (ctype_digit($raw) && strlen($raw) <= 3) {
+                BoardPrefs::save($sid, BoardPrefs::withoutView($prefs, (int) $raw));
+            }
+            // The board itself stays as it is; only the name is gone.
+            $target = '';
+        }
+
+        Http::redirect(ROOT_PATH . BoardPlugin::STAFF_BASE . ($target !== '' ? '?queue=' . $target : ''));
+        exit;
+    }
+
+    public const NOTICE_SESSION_KEY = 'spb:staff_notice';
+
+    /**
+     * The remembered selection without loading any tickets: the same rules
+     * as staffView() with an empty query.
+     *
+     * @return array{queue:int, teams:int[], sort:string, group:string}
+     */
+    private static function currentState(Staff $staff, array $prefs): array
+    {
+        $none = array();
+        $mem = BoardPrefs::memory($prefs);
+        $queueId = self::selectedQueueId($none, $mem);
+        $queue = $queueId > 0 ? BoardQuery::queueFor($staff, $queueId) : null;
+        list($teams) = BoardPrefs::selectedTeams($none, $prefs['teams'], BoardQuery::teamOptions());
+        return array(
+            'queue' => $queue ? (int) $queue->getId() : 0,
+            'teams' => $teams,
+            'sort'  => self::selectedOption($none, $mem, 'sort', BoardModel::SORTS),
+            'group' => self::selectedOption($none, $mem, 'group', BoardModel::GROUPS),
+        );
+    }
+
+    /** A one-time message key left by staffSaveView(), or ''. */
+    private static function takeNotice(): string
+    {
+        $key = is_string($_SESSION[self::NOTICE_SESSION_KEY] ?? null) ? $_SESSION[self::NOTICE_SESSION_KEY] : '';
+        unset($_SESSION[self::NOTICE_SESSION_KEY]);
+        return in_array($key, array('view_invalid'), true) ? $key : '';
+    }
+
+    /** osTicket's hidden CSRF field for the board's own forms. */
+    private static function csrfInput(): string
+    {
+        global $ost;
+
+        $csrf = $ost ? $ost->getCSRF() : null;
+        return $csrf ? (string) $csrf->getFormInput() : '';
     }
 
     /**
@@ -221,7 +348,8 @@ final class BoardController
         if (self::staffGated($thisstaff)) {
             return self::json(403, array('error' => 'account_action_required'));
         }
-        $view = self::staffView($thisstaff, array_intersect_key($_GET, array('queue' => 1)));
+        // The page's own filters travel along; nothing is remembered here.
+        $view = self::staffView($thisstaff, array_intersect_key($_GET, array('queue' => 1, 'team' => 1, 'team_set' => 1)), false);
         return self::json(200, array(
             'signature' => BoardModel::signature($view['result']['rows']),
             'count'     => count($view['result']['rows']),
@@ -229,42 +357,43 @@ final class BoardController
     }
 
     /**
-     * A remembered choice from a fixed list: ?<name>=<value> selects and
+     * A remembered choice from a fixed list (memory: BoardPrefs::memory(),
+     * kept per agent): ?<name>=<value> selects and
      * remembers it, an unknown value falls back to the first entry. Public
      * for the unit tests.
      */
-    public static function selectedOption(array $get, array &$session, string $name, array $allowed): string
+    public static function selectedOption(array $get, array &$memory, string $name, array $allowed): string
     {
         $key = 'spb:staff_' . $name;
         if (array_key_exists($name, $get)) {
             $value = is_string($get[$name]) && in_array($get[$name], $allowed, true) ? $get[$name] : $allowed[0];
-            $session[$key] = $value;
+            $memory[$key] = $value;
             return $value;
         }
-        $value = $session[$key] ?? $allowed[0];
+        $value = $memory[$key] ?? $allowed[0];
         return in_array($value, $allowed, true) ? $value : $allowed[0];
     }
 
-    public const QUEUE_SESSION_KEY = 'spb:staff_queue';
+    public const QUEUE_KEY = 'spb:staff_queue';
 
     /**
      * Which queue the board shows. ?queue=<id> selects and remembers it,
      * ?queue=all goes back to the default view; without the parameter the
      * remembered choice applies. Access is checked by the caller.
      */
-    public static function selectedQueueId(array $get, array &$session): int
+    public static function selectedQueueId(array $get, array &$memory): int
     {
         if (array_key_exists('queue', $get)) {
             $raw = is_string($get['queue']) ? $get['queue'] : '';
             $id = ctype_digit($raw) ? (int) $raw : 0;
             if ($id > 0) {
-                $session[self::QUEUE_SESSION_KEY] = $id;
+                $memory[self::QUEUE_KEY] = $id;
             } else {
-                unset($session[self::QUEUE_SESSION_KEY]);
+                unset($memory[self::QUEUE_KEY]);
             }
             return $id;
         }
-        return (int) ($session[self::QUEUE_SESSION_KEY] ?? 0);
+        return (int) ($memory[self::QUEUE_KEY] ?? 0);
     }
 
     public static function staffMove(): string
@@ -780,22 +909,28 @@ final class BoardController
     }
 
     /**
-     * Open tasks per ticket, for the badge on the cards. Same per-task rule
-     * as the quick view, so a badge never counts a task the panel leaves
-     * out. The ticket IDs come from the board query, which already applied
-     * the agent's ticket visibility.
+     * Tasks per ticket for the cards: the number of open ones for the badge,
+     * and "number title" of every task for the board search, so a task
+     * number finds its ticket. Same per-task rule as the quick view, so
+     * neither counts nor finds a task the panel leaves out. The ticket IDs
+     * come from the board query, which already applied the agent's ticket
+     * visibility.
      *
      * @param int[] $ticketIds
-     * @return array<int, int>  ticket ID => open tasks, only tickets with any
+     * @return array{open: array<int, int>, search: array<int, string[]>}
      */
-    public static function openTaskCounts(array $ticketIds, Staff $staff): array
+    public static function taskIndex(array $ticketIds, Staff $staff): array
     {
-        $out = array();
-        foreach (self::tasksOf($ticketIds, $staff, true) as $task) {
+        $open = array();
+        $search = array();
+        foreach (self::tasksOf($ticketIds, $staff, false) as $task) {
             $tid = (int) $task->get('object_id');
-            $out[$tid] = ($out[$tid] ?? 0) + 1;
+            if ($task->isOpen()) {
+                $open[$tid] = ($open[$tid] ?? 0) + 1;
+            }
+            $search[$tid][] = '#' . $task->getNumber() . ' ' . $task->getTitle();
         }
-        return $out;
+        return array('open' => $open, 'search' => $search);
     }
 
     /**
@@ -955,6 +1090,7 @@ final class BoardController
             'closed_days' => $s['closed_days'],
             'max_cards'   => $s['max_cards'],
             'truncated'   => $result['truncated'],
+            'search'      => true,
         ));
 
         return self::page('client', $strings['title'], $html);

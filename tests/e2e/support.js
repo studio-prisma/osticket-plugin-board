@@ -45,7 +45,13 @@ async function clientLogin(page, email) {
   await expect(page.locator('a[href*="logout.php"]').first()).toBeVisible();
 }
 
-async function staffLogin(page, user, pass) {
+async function staffLogin(page, user, pass, { keepPrefs = false } = {}) {
+  // The board remembers queue, sort, grouping and teams per agent. Each test
+  // starts from the defaults unless it checks exactly that memory.
+  if (!keepPrefs) {
+    sql(`DELETE c FROM ost_config c JOIN ost_staff s ON c.namespace = CONCAT('studio-prisma.board.staff.', s.staff_id)
+      WHERE s.username = '${user.replace(/'/g, "''")}'`);
+  }
   await page.goto('/scp/login.php');
   await page.fill('input[name="userid"]', user);
   await page.fill('input[name="passwd"]', pass);

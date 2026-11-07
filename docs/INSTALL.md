@@ -89,6 +89,10 @@ As the **non-admin** test agent:
 | 4.10c | Optional: put a triage status in "Next ticket from these columns", then change the status of a ticket in that column from the quick view | The quick view opens the next card of the same column; on the last card it closes with "Nothing left in …" |
 | 4.10b | In the quick view, write a line in the note field, then click a closed status on a test ticket | No dialog; the ticket is closed, the note is in its thread, the quick view shows the next open card. "Undo" in the toast reopens it |
 | 4.11 | Post an internal note with `<b>test</b>` | Note in the ticket view as literal text, not bold; not visible in the client portal |
+| 4.14 | Type a ticket number into the search field above the board, then the number of a task, then a word from a subject | Only the matching cards stay, a line says "x of y tickets"; `Esc` brings all back |
+| 4.15 | Search for a number of a ticket the agent can't see | "No ticket on the board matches." and a link to osTicket's search; the card isn't on the page |
+| 4.16 | Team filter: tick two teams, close the fold-out; pick a queue, sort and grouping; log out and in again | Tickets of those teams and tickets assigned to their members, in every grouping; after logging in again, teams, queue, sort and grouping are still set |
+| 4.17 | "Save view" with a name, switch to another view, pick it from "My views", then delete it | Queue, teams, sort and grouping come back as saved; after deleting, the name is gone and the board stays |
 
 Stop if: 4.3 shows a ticket the agent can't open in the normal ticket view. Disable the instance and report it (see SECURITY.md).
 
@@ -123,6 +127,9 @@ Stop if: 5.2 or 5.4 shows a ticket the client can't open via "Tickets". Switch t
 | Invisible ticket | As an agent, POST a ticket ID from a foreign department | `404`, same body as for a non-existent ID |
 | Status outside open/closed | POST the ID of *Archived* or *Deleted* | `422` |
 | Markup in subjects | Create a ticket with `<b>x</b>` in the subject | Shown as text on both boards |
+| Saved views need CSRF | As an agent, POST to `/scp/ajax.php/board/view` without the token | `400`, nothing saved |
+| Views stay private | Open `/scp/ajax.php/board?queue=v0` as an agent without saved views | Default view; another agent's view isn't reachable |
+| Team filter doesn't widen | As an agent without access to a department, tick the team of a ticket from there | The ticket isn't shown |
 
 The end-to-end suite in `tests/e2e/` runs all of these against a local instance.
 
@@ -130,8 +137,8 @@ The end-to-end suite in `tests/e2e/` runs all of these against a local instance.
 
 ## Updating
 
-Replace the folder `include/plugins/board/` with the new release. Settings live in osTicket's config table and stay. Read the CHANGELOG first: a major version bump means a changed behaviour or setting.
+Replace the folder `include/plugins/board/` with the new release. Settings live in osTicket's config table and stay. Each agent's last view, sort, grouping and team filter and their saved views live there too (namespace `studio-prisma.board.staff.<id>`). Read the CHANGELOG first: a major version bump means a changed behaviour or setting.
 
 ## Uninstalling
 
-Admin Panel → Plugins → Ticket Board → Delete, then remove `include/plugins/board/`. Nothing else is left behind.
+Admin Panel → Plugins → Ticket Board → Delete, then remove `include/plugins/board/`. What stays are the agents' board preferences (last view, sort, grouping, team filter, saved views), one row per agent in the config table; remove them with `DELETE FROM <prefix>config WHERE namespace LIKE 'studio-prisma.board.staff.%'` (`<prefix>` is usually `ost_`).

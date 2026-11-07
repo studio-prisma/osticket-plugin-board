@@ -4,10 +4,25 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-07
+
+### Added
+
+- Search field above both boards. It filters the cards as you type, in the browser, without a request: ticket number, task number, subject, requester name and email, organisation, department, assignee, team and sub-tickets on the agent board; number, subject, department and sub-tickets on the client board. Several words must all match, case and accents don't matter. `/` jumps into the field, `Esc` clears it, and the filter stays through live refresh and reloads in the same tab. With no match, or when the board was cut at its card limit, the agent board links the same words to osTicket's ticket search.
+- Team filter on the agent board: several teams at once plus "Without team", applied on the server on top of the selected queue or saved search, independent of the grouping. A team covers tickets assigned to the team and tickets assigned personally to one of its members. The last selection is stored per agent in osTicket's config table and survives logging out.
+- Saved views: "My views" in the View picker stores queue, team filter, sort and grouping under a name. Saved and deleted on the board through `POST /scp/ajax.php/board/view` (CSRF-checked); each agent sees only their own, up to 20.
+
 ### Changed
 
+- The live-refresh check passes the page's team filter along, so two tabs with different filters each compare against their own board.
+- The selected view (queue or saved search), sort and grouping are remembered per agent in the same config row as the team filter, across sessions and browsers, instead of per session.
+- Uninstalling leaves the agents' board preferences and saved views in the config table; `docs/INSTALL.md` has the statement to remove them.
 - `LICENSE` contains only the GPL-2.0 text, so GitHub detects the licence.
   Removed a header that wrongly claimed earlier releases were MIT-licensed.
+
+### Security
+
+- The team filter only narrows: it is added on top of `Staff::getTicketsVisibility()`, and a queue inside a saved view goes through the same access check as `?queue=` on every use. Team IDs and view names are validated before they reach the ORM or the page; card search text is escaped once, by `BoardRenderer::e()`.
 
 ## [0.6.0] - 2026-11-02
 
@@ -96,7 +111,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - English and German UI strings.
 - Local test stack (osTicket 1.18.4, MariaDB, Mailpit) and Playwright end-to-end suite.
 
-[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/studio-prisma/osticket-plugin-board/compare/v0.3.3...v0.4.0

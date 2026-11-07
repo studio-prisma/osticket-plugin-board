@@ -1,9 +1,10 @@
 /*
- * Ticket Board for osTicket: drag and drop, quick view, actions and live
- * refresh for the agent board.
+ * Ticket Board for osTicket: drag and drop, quick view, actions, live
+ * refresh and the team filter for the agent board; the search field for
+ * both boards.
  *
- * The client board is static HTML; this script only acts on a board with
- * data-mode="staff" and a data-move-url. It never builds markup from ticket
+ * On the client board only the search runs; everything else acts on a
+ * board with data-mode="staff" and a data-move-url. It never builds markup from ticket
  * data: cards are moved as existing DOM nodes, messages are set via
  * textContent. Two places take server-rendered HTML as a whole: the
  * quick-view panel and, on live refresh, the board element of a fresh copy
@@ -125,7 +126,10 @@
       else count.removeAttribute('title');
     }
 
+    // Column and lane counts stay totals while searching: limits are about
+    // the real load, and the search line says how many match.
     function refreshCounts() {
+      if (wrap.spbSearchApply) wrap.spbSearchApply();
       var b = board();
       Array.prototype.forEach.call(b.querySelectorAll('.spb-col'), function (col) {
         var n = topCards(col);
@@ -275,7 +279,10 @@
         return !dragged && !busy
           && Date.now() - lastInput > 8000
           && !(popup && popup.offsetParent)
-          && !(active && wrap.contains(active) && /^(TEXTAREA|INPUT|SELECT)$/.test(active.tagName));
+          // The search field doesn't count: the filter is reapplied after
+          // the swap.
+          && !(active && wrap.contains(active) && /^(TEXTAREA|INPUT|SELECT)$/.test(active.tagName)
+            && !active.classList.contains('spb-search-input'));
       },
       swapped: function () {
         refreshCounts();
@@ -664,9 +671,16 @@
     var own = false;
     var running = false;
 
+    // The page's filters travel along, so the fingerprint is for this tab's
+    // board even if another tab changed the remembered ones.
     function stateUrl() {
-      var q = new URLSearchParams(location.search).get('queue');
-      return url + (q ? '?queue=' + encodeURIComponent(q) : '');
+      var page = new URLSearchParams(location.search);
+      var out = new URLSearchParams();
+      page.forEach(function (value, name) {
+        if (name === 'queue' || name === 'team_set' || name === 'team[]') out.append(name, value);
+      });
+      var qs = out.toString();
+      return url + (qs ? '?' + qs : '');
     }
 
     function swap(quiet) {
@@ -734,6 +748,128 @@
     return api;
   }
 
+  /*
+   * Board search. Filters the cards already on the page, nothing is sent
+   * anywhere: each card carries data-search (rendered and escaped on the
+   * server), the field hides the cards that don't contain every word.
+   * Case and accents don't matter. Works on both boards; on the agent board
+   * a link hands the words to osTicket's own search when nothing matches
+   * or the board was cut at its card limit. Survives live refresh and
+   * reloads in the same tab (sessionStorage).
+   */
+  function fold(s) {
+    s = String(s || '');
+    if (s.normalize) s = s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return s.toLowerCase();
+  }
+
+  function initSearch(wrap) {
+    var bar = wrap.querySelector('.spb-search');
+    if (!bar || bar.dataset.spbReady === '1') return;
+    bar.dataset.spbReady = '1';
+    bar.hidden = false;
+    var input = bar.querySelector('.spb-search-input');
+    var count = bar.querySelector('.spb-search-count');
+    var more = bar.querySelector('.spb-search-more');
+    var searchUrl = bar.dataset.searchUrl || '';
+    var truncated = bar.dataset.truncated === '1';
+    var key = 'spb:search:' + location.pathname;
+    var cache = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+    function haystack(card) {
+      var h = cache ? cache.get(card) : null;
+      if (h == null) {
+        h = fold(card.dataset.search || card.textContent);
+        if (cache) cache.set(card, h);
+      }
+      return h;
+    }
+
+    function apply() {
+      var words = fold(input.value).split(/\s+/).filter(Boolean);
+      var cards = wrap.querySelectorAll('.spb-board .spb-cards > .spb-card');
+      var shown = 0;
+      Array.prototype.forEach.call(cards, function (card) {
+        var hit = words.every(function (w) { return haystack(card).indexOf(w) !== -1; });
+        card.hidden = !hit;
+        if (hit) shown++;
+      });
+      Array.prototype.forEach.call(wrap.querySelectorAll('.spb-board .spb-lane'), function (lane) {
+        lane.hidden = words.length > 0 && !lane.querySelector('.spb-cards > .spb-card:not([hidden])');
+      });
+      wrap.classList.toggle('spb-filtering', words.length > 0);
+      if (!words.length) {
+        count.textContent = '';
+        if (more) more.hidden = true;
+        return;
+      }
+      count.textContent = shown ? fmt(bar.dataset.i18nCount, shown, cards.length) : String(bar.dataset.i18nNone || '');
+      count.classList.toggle('spb-error', !shown);
+      if (more && searchUrl) {
+        var url = new URL(searchUrl, location.href);
+        url.searchParams.set('a', 'search');
+        url.searchParams.set('search-type', '');
+        url.searchParams.set('query', input.value.trim());
+        more.href = url.pathname + url.search;
+        more.hidden = !(shown === 0 || truncated);
+      }
+    }
+
+    var frame = 0;
+    input.addEventListener('input', function () {
+      try { sessionStorage.setItem(key, input.value); } catch (e) { /* private mode */ }
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(apply);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && input.value !== '') {
+        e.preventDefault();
+        e.stopPropagation();
+        input.value = '';
+        try { sessionStorage.removeItem(key); } catch (err) { /* private mode */ }
+        apply();
+      }
+    });
+    // "/" jumps into the field, as on many sites, unless typing elsewhere.
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      var a = document.activeElement;
+      if (a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) return;
+      e.preventDefault();
+      input.focus();
+      input.select();
+    });
+
+    try { input.value = sessionStorage.getItem(key) || ''; } catch (e) { /* private mode */ }
+    wrap.spbSearchApply = apply;
+    apply();
+  }
+
+  // Team filter: checkboxes in a fold-out; closing it applies a change.
+  function initTeams(details) {
+    if (details.dataset.spbReady === '1') return;
+    details.dataset.spbReady = '1';
+    function picked() {
+      return Array.prototype.map.call(details.querySelectorAll('input:checked'), function (b) { return b.value; }).join(',');
+    }
+    var before = picked();
+    details.addEventListener('toggle', function () {
+      if (!details.open && picked() !== before && details.closest('form')) {
+        details.closest('form').submit();
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (details.open && !details.contains(e.target)) details.open = false;
+    });
+    details.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && details.open) {
+        e.stopPropagation();
+        details.open = false;
+        details.querySelector('summary').focus();
+      }
+    });
+  }
+
   // Pickers: switch views on change; the button stays for no-JS use.
   function initPicker(select) {
     if (select.dataset.spbReady === '1') return;
@@ -746,8 +882,18 @@
   }
 
   function boot() {
+    Array.prototype.forEach.call(document.querySelectorAll('.spb-wrap'), initSearch);
     Array.prototype.forEach.call(document.querySelectorAll('.spb-wrap'), initWrap);
     Array.prototype.forEach.call(document.querySelectorAll('select[data-spb-autosubmit]'), initPicker);
+    Array.prototype.forEach.call(document.querySelectorAll('details[data-spb-teams]'), initTeams);
+    // Delete a saved view only after asking.
+    Array.prototype.forEach.call(document.querySelectorAll('button[data-spb-confirm]'), function (b) {
+      if (b.dataset.spbReady === '1') return;
+      b.dataset.spbReady = '1';
+      b.addEventListener('click', function (e) {
+        if (!window.confirm(b.dataset.spbConfirm)) e.preventDefault();
+      });
+    });
   }
 
   if (document.readyState === 'loading') {

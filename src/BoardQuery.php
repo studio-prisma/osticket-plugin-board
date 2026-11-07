@@ -80,11 +80,91 @@ final class BoardQuery
     /**
      * @return array{rows: array, truncated: bool}
      */
-    public static function forStaff(Staff $staff, int $closedDays, int $limit): array
+    public static function forStaff(Staff $staff, int $closedDays, int $limit, array $teams = array()): array
     {
         $q = self::base($closedDays)
             ->filter($staff->getTicketsVisibility());
+        self::filterTeams($q, $teams);
         return self::fetch($q, $limit, true);
+    }
+
+    // ------------------------------------------------------------------
+    // Team filter
+    // ------------------------------------------------------------------
+
+    /**
+     * Every team, id => name, for the team filter. Disabled teams too:
+     * tickets can still be assigned to them. Team names are no secret in
+     * the agent panel, every assignment menu lists them.
+     *
+     * @return array<int, string>
+     */
+    public static function teamOptions(): array
+    {
+        if (!class_exists('Team')) {
+            return array();
+        }
+        $out = array();
+        foreach (Team::objects()->order_by('name')->values_flat('team_id', 'name') as $row) {
+            $out[(int) $row[0]] = (string) Team::getLocalById((int) $row[0], 'name', (string) $row[1]);
+        }
+        return $out;
+    }
+
+    /**
+     * Agents who are members of any of these teams (Admin Panel, Agents,
+     * Teams, Members).
+     *
+     * @param int[] $teamIds  > 0
+     * @return int[]
+     */
+    public static function teamMemberIds(array $teamIds): array
+    {
+        if (!$teamIds || !class_exists('TeamMember')) {
+            return array();
+        }
+        $out = array();
+        foreach (TeamMember::objects()->filter(array('team_id__in' => $teamIds))->values_flat('staff_id') as $row) {
+            if ((int) $row[0] > 0) {
+                $out[(int) $row[0]] = true;
+            }
+        }
+        $ids = array_keys($out);
+        sort($ids);
+        return $ids;
+    }
+
+    /**
+     * Narrows a ticket query to the teams in $teams: tickets assigned to one
+     * of the teams (the column osTicket's "Assigned Team" search uses) or to
+     * a member of one of them personally. 0 = tickets without a team. Only
+     * ever added on top of the visibility filter, so it can't widen
+     * anything. The IDs were checked against teamOptions() by the caller and
+     * are bound as parameters by the ORM.
+     *
+     * @param int[] $teams  empty = no filter
+     */
+    private static function filterTeams($q, array $teams): void
+    {
+        $teams = array_values(array_unique(array_map('intval', $teams)));
+        if (!$teams) {
+            return;
+        }
+        $any = array();
+        $ids = array_values(array_filter($teams, static function ($id) {
+            return $id > 0;
+        }));
+        if ($ids) {
+            $any[] = new Q(array('team_id__in' => $ids));
+            $members = self::teamMemberIds($ids);
+            if ($members) {
+                $any[] = new Q(array('staff_id__in' => $members));
+            }
+        }
+        if (in_array(BoardPrefs::NO_TEAM, $teams, true)) {
+            $any[] = new Q(array('team_id' => 0));
+        }
+        $q->filter(Q::any($any));
     }
 
     // ------------------------------------------------------------------
@@ -148,15 +228,17 @@ final class BoardQuery
      *     search when the agent may search everything;
      *   - queues hide sub-tickets as rows.
      *
-     * Hidden sub-tickets are then loaded for the parents on the board, so the
-     * cards still carry them. Those always get the agent's visibility; a
+     * The team filter narrows the queue's own rows. Hidden sub-tickets are
+     * then loaded for the parents on the board, so the cards still carry
+     * them. Those always get the agent's visibility; a
      * sub-ticket is only context, never a reason to widen what an agent sees.
      *
      * @return array{rows: array, truncated: bool}
      */
-    public static function forStaffQueue(Staff $staff, $queue, int $limit): array
+    public static function forStaffQueue(Staff $staff, $queue, int $limit, array $teams = array()): array
     {
         $q = $queue->getBasicQuery();
+        self::filterTeams($q, $teams);
 
         $isQueue = $queue->isAQueue() || $queue->isASubQueue();
         if (!$queue->ignoreVisibilityConstraints($staff) || $isQueue) {
@@ -258,7 +340,8 @@ final class BoardQuery
         if ($withStaffFields) {
             // Due dates, priority, organisation and team are agent-only: the
             // client portal doesn't show them either.
-            $fields = array_merge($fields, array('user__name', 'staff__firstname', 'staff__lastname',
+            $fields = array_merge($fields, array('user__name', 'user__default_email__address',
+                'staff__firstname', 'staff__lastname',
                 'created', 'duedate', 'est_duedate', 'team__name', 'user__org__name',
                 'cdata__:priority__priority_desc', 'cdata__:priority__priority_urgency'));
             if (class_exists('TicketForm')) {
@@ -300,6 +383,9 @@ final class BoardQuery
                     'urgency'     => (int) $r['cdata__:priority__priority_urgency'],
                     'org'         => (string) $r['user__org__name'],
                     'team'        => (string) $r['team__name'],
+                    // For the board search only. The ticket view shows it
+                    // to the same agent.
+                    'email'       => (string) $r['user__default_email__address'],
                 );
             }
         }

@@ -20,7 +20,11 @@ final class BoardRenderer
      *                      queue_missing, queue_action, search_url, panel_url,
      *                      sort, group, lanes (BoardModel::lanes or null),
      *                      limits (status id => limit), now (DB time),
-     *                      refresh_url, refresh_seconds, signature
+     *                      refresh_url, refresh_seconds, signature,
+     *                      teams (id => name), team_ids, views
+     *                      (BoardPrefs), view_index, view_url, csrf_input,
+     *                      notice, task_search (ticket id => lines);
+     *                      both: search (bool, adds field and data-search)
      */
     public static function render(array $board, array $ctx): string
     {
@@ -74,6 +78,9 @@ final class BoardRenderer
         $out[] = '<div class="spb-wrap">';
         if ($staff && isset($ctx['queues'], $ctx['queue_action'])) {
             $out[] = self::queuePicker($ctx);
+        }
+        if (!empty($ctx['search'])) {
+            $out[] = self::searchBar($ctx, $staff);
         }
         $hint = $staff ? $t['drag_hint'] : $t['readonly'];
         if ($staff && !empty($ctx['panel_url'])) {
@@ -133,10 +140,29 @@ final class BoardRenderer
             );
         }
 
+        // A saved view that matches the board wins the selection; the
+        // queue it contains is part of it.
+        $views = $ctx['views'] ?? array();
+        $viewIndex = (int) ($ctx['view_index'] ?? -1);
+        if ($viewIndex >= 0 && isset($views[$viewIndex])) {
+            foreach ($groups as $g => $options) {
+                $groups[$g] = str_replace(' selected>', '>', $options);
+            }
+        } else {
+            $viewIndex = -1;
+        }
+
         $html = sprintf('<form class="spb-toolbar" method="get" action="%s">', self::e($ctx['queue_action']));
         $html .= sprintf('<label for="spb-queue">%s</label> ', self::e($t['queue_label']));
         $html .= '<select id="spb-queue" name="queue" data-spb-autosubmit>';
-        $html .= sprintf('<option value="all"%s>%s</option>', $current === 0 ? ' selected' : '', self::e($t['queue_all']));
+        $html .= sprintf('<option value="all"%s>%s</option>', $current === 0 && $viewIndex < 0 ? ' selected' : '', self::e($t['queue_all']));
+        if ($views) {
+            $own = '';
+            foreach ($views as $i => $v) {
+                $own .= sprintf('<option value="v%d"%s>%s</option>', (int) $i, (int) $i === $viewIndex ? ' selected' : '', self::e($v['name']));
+            }
+            $html .= sprintf('<optgroup label="%s">%s</optgroup>', self::e($t['views_group']), $own);
+        }
         if ($groups['queue']) {
             $html .= sprintf('<optgroup label="%s">%s</optgroup>', self::e($t['queue_group']), implode('', $groups['queue']));
         }
@@ -164,15 +190,137 @@ final class BoardRenderer
             $html .= '</select> ';
         }
 
+        if (!empty($ctx['teams'])) {
+            $html .= self::teamPicker($ctx['teams'], $ctx['team_ids'] ?? array(), $t);
+        }
+
         $html .= sprintf('<button type="submit" class="spb-show">%s</button>', self::e($t['queue_show']));
         if (!empty($ctx['search_url'])) {
             $html .= sprintf(' <a class="spb-manage" href="%s">%s</a>', self::e($ctx['search_url']), self::e($t['queue_manage']));
         }
         $html .= '</form>';
+        // The notice belongs to the picker, right under it.
         if (!empty($ctx['queue_missing'])) {
             $html .= sprintf('<p class="spb-hint spb-warn">%s</p>', self::e($t['queue_missing']));
         }
+        if (!empty($ctx['view_url'])) {
+            $html .= self::viewForms($ctx, $viewIndex);
+        }
+        if (($ctx['notice'] ?? '') === 'view_invalid') {
+            $html .= sprintf('<p class="spb-hint spb-warn">%s</p>', self::e(sprintf($t['view_invalid'], BoardPrefs::NAME_MAX, BoardPrefs::VIEW_MAX)));
+        }
         return $html;
+    }
+
+    /**
+     * Team filter: checkboxes in a fold-out, part of the toolbar's GET form.
+     * team_set marks the submit, so "nothing checked" (all teams) can be
+     * told apart from "not submitted" (keep the stored selection).
+     *
+     * @param array<int, string> $teams  id => name
+     * @param int[] $selected  0 = without team
+     */
+    private static function teamPicker(array $teams, array $selected, array $t): string
+    {
+        $names = array();
+        $boxes = '';
+        $choices = array(BoardPrefs::NO_TEAM => $t['team_none']) + $teams;
+        foreach ($choices as $id => $name) {
+            $on = in_array((int) $id, $selected, true);
+            if ($on) {
+                $names[] = $name;
+            }
+            $boxes .= sprintf('<label class="spb-team%s"><input type="checkbox" name="team[]" value="%d"%s> %s</label>',
+                $id === BoardPrefs::NO_TEAM ? ' spb-team-none' : '', (int) $id, $on ? ' checked' : '', self::e($name));
+        }
+        if (!$names) {
+            $summary = $t['team_all'];
+        } elseif (count($names) === 1) {
+            $summary = $names[0];
+        } else {
+            $summary = sprintf($t['team_some'], count($names));
+        }
+        return sprintf(
+            '<span class="spb-teams-label" id="spb-teams-label">%s</span> '
+            . '<details class="spb-teams" data-spb-teams%s><summary aria-describedby="spb-teams-label">%s</summary>'
+            . '<div class="spb-teams-list" role="group" aria-labelledby="spb-teams-label">%s</div></details>'
+            . '<input type="hidden" name="team_set" value="1"> ',
+            self::e($t['team_label']),
+            $names ? ' data-active="1"' : '',
+            self::e($summary),
+            $boxes
+        );
+    }
+
+    /**
+     * Save the current view under a name, and delete the saved view the
+     * board currently shows. Plain POST forms with osTicket's CSRF field;
+     * $ctx['csrf_input'] is osTicket's own markup (CSRF::getFormInput()).
+     */
+    private static function viewForms(array $ctx, int $viewIndex): string
+    {
+        $t = $ctx['strings'];
+        $csrf = (string) ($ctx['csrf_input'] ?? '');
+        $html = '<div class="spb-views">';
+        $html .= sprintf(
+            '<details class="spb-view-save"><summary>%s</summary>'
+            . '<form method="post" action="%s">%s<input type="hidden" name="op" value="save">'
+            . '<label for="spb-view-name">%s</label> '
+            . '<input type="text" id="spb-view-name" name="name" maxlength="%d" required autocomplete="off"> '
+            . '<button type="submit">%s</button><p class="spb-hint">%s</p></form></details>',
+            self::e($t['view_save']),
+            self::e($ctx['view_url']),
+            $csrf,
+            self::e($t['view_name']),
+            BoardPrefs::NAME_MAX,
+            self::e($t['view_save_submit']),
+            self::e($t['view_save_hint'])
+        );
+        $views = $ctx['views'] ?? array();
+        if ($viewIndex >= 0 && isset($views[$viewIndex])) {
+            $name = (string) $views[$viewIndex]['name'];
+            $html .= sprintf(
+                '<form class="spb-view-delete" method="post" action="%s">%s<input type="hidden" name="op" value="delete">'
+                . '<input type="hidden" name="view" value="%d">'
+                . '<button type="submit" data-spb-confirm="%s">%s</button></form>',
+                self::e($ctx['view_url']),
+                $csrf,
+                $viewIndex,
+                self::e(sprintf($t['view_delete_confirm'], $name)),
+                self::e(sprintf($t['view_delete'], $name))
+            );
+        }
+        return $html . '</div>';
+    }
+
+    /**
+     * Search field over the cards already on the board. Filtering happens in
+     * board.js; without JavaScript the field stays hidden. On the agent
+     * board, a link hands the same words to osTicket's own ticket search,
+     * for tickets the board doesn't load and for the thread text.
+     */
+    private static function searchBar(array $ctx, bool $staff): string
+    {
+        $t = $ctx['strings'];
+        $attrs = sprintf(' data-i18n-count="%s" data-i18n-none="%s"',
+            self::e($t['search_count']), self::e($t['search_none']));
+        if ($staff && !empty($ctx['search_url'])) {
+            $attrs .= sprintf(' data-search-url="%s"', self::e($ctx['search_url']));
+        }
+        if (!empty($ctx['truncated'])) {
+            $attrs .= ' data-truncated="1"';
+        }
+        $html = sprintf('<div class="spb-search" role="search" hidden%s>', $attrs);
+        $html .= sprintf('<label for="spb-search-input" class="spb-sr">%s</label>', self::e($t['search_label']));
+        $html .= sprintf(
+            '<input type="search" id="spb-search-input" class="spb-search-input" placeholder="%s" autocomplete="off" spellcheck="false" maxlength="200" aria-describedby="spb-search-count">',
+            self::e($staff ? $t['search_placeholder'] : $t['search_placeholder_client'])
+        );
+        $html .= '<span class="spb-search-count" id="spb-search-count" aria-live="polite"></span>';
+        if ($staff && !empty($ctx['search_url'])) {
+            $html .= sprintf('<a class="spb-search-more" href="%s" hidden>%s</a>', self::e($ctx['search_url']), self::e($t['search_more']));
+        }
+        return $html . '</div>';
     }
 
     /** Column head: status dot, name, count, and "n of limit" when limited. */
@@ -305,10 +453,16 @@ final class BoardRenderer
         $t = $ctx['strings'];
         $url = $ctx['ticket_url'] . rawurlencode((string) $c['id']);
 
+        $search = '';
+        if (!empty($ctx['search'])) {
+            $taskLines = $staff ? ($ctx['task_search'][(int) $c['id']] ?? array()) : array();
+            $search = sprintf(' data-search="%s"', self::e(BoardModel::searchText($c, $taskLines, $staff)));
+        }
         $html = sprintf(
-            '<li class="spb-card" data-ticket-id="%d" data-number="%s"%s>',
+            '<li class="spb-card" data-ticket-id="%d" data-number="%s"%s%s>',
             (int) $c['id'],
             self::e($c['number']),
+            $search,
             $staff ? ' draggable="true" tabindex="0"' : ''
         );
         $html .= sprintf(
