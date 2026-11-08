@@ -8,7 +8,9 @@ declare(strict_types=1);
  * Hooks, all without core patches:
  *
  *   Agent panel   Application::registerStaffApp() adds the entry under
- *                 "Applications". The ajax.scp signal of scp/ajax.php receives
+ *                 "Applications"; an output buffer places a "Board" tab
+ *                 before Tasks (NavInjector), because StaffNav builds its
+ *                 tabs without a hook. The ajax.scp signal of scp/ajax.php receives
  *                 /board, /board/move, /board/act, /board/state, /board/panel/{id},
  *                 /board/note, /board/view and /board/assets/*.
  *   Start page    scp/index.php (logo, login without a target) is buffered and
@@ -48,7 +50,7 @@ require_once __DIR__ . '/src/BoardAiTools.php';
 class BoardPlugin extends Plugin
 {
     /** Mirrors plugin.php; used for cache-busting the asset URLs only. */
-    public const VERSION = '0.7.0';
+    public const VERSION = '0.8.0';
 
     /** Route bases, relative to ROOT_PATH. */
     public const STAFF_BASE = 'scp/ajax.php/board';
@@ -86,6 +88,7 @@ class BoardPlugin extends Plugin
             'refresh_seconds' => $config->get('refresh_seconds'),
             'next_after_close' => $config->get('next_after_close'),
             'staff_landing'   => $config->get('staff_landing'),
+            'staff_nav'       => $config->get('staff_nav'),
             'next_to_statuses'   => $config->get('next_to_statuses'),
             'next_from_statuses' => $config->get('next_from_statuses'),
             'next_from_actions'  => $config->get('next_from_actions'),
@@ -107,6 +110,13 @@ class BoardPlugin extends Plugin
                 'class'     => 'no-pjax',
             ));
             Signal::connect('ajax.scp', array(__CLASS__, 'staffRoutes'));
+            if ($s['staff_nav'] && self::isStaffPage(
+                (string) ($_SERVER['SCRIPT_NAME'] ?? ''),
+                (string) ($_SERVER['PATH_INFO'] ?? ''),
+                $_GET
+            )) {
+                ob_start(array(__CLASS__, 'injectStaffNav'));
+            }
             // Board actions for the AI Actions plugin's assistant, if it is installed.
             Signal::connect('ai-actions.tools', static function ($registry) {
                 BoardAiTools::register($registry);
@@ -191,6 +201,55 @@ class BoardPlugin extends Plugin
         }
         $skip = array('file.php', 'logo.php', 'avatar.php', 'captcha.php', 'logout.php');
         return !in_array($base, $skip, true);
+    }
+
+    /**
+     * Whether an agent-panel request may render the top navigation. Same
+     * reasoning as isPortalPage(): exports, prints, downloads and AJAX never
+     * get a buffer.
+     */
+    public static function isStaffPage(string $script, string $pathInfo = '', array $get = array()): bool
+    {
+        return PHP_SAPI !== 'cli' && self::isStaffPath($script, $pathInfo, $get);
+    }
+
+    public static function isStaffPath(string $script, string $pathInfo = '', array $get = array()): bool
+    {
+        if (!preg_match('#/scp/[^/]+\.php$#', $script)) {
+            return false;
+        }
+        $base = strtolower(basename($script));
+        if ($base === 'ajax.php') {
+            return (bool) preg_match('#^/board/?$#', $pathInfo);
+        }
+        $skip = array('file.php', 'image.php', 'avatar.php', 'logout.php', 'login.php', 'pwreset.php', 'apps.php');
+        if (in_array($base, $skip, true)) {
+            return false;
+        }
+        $a = is_string($get['a'] ?? null) ? strtolower($get['a']) : '';
+        return !in_array($a, array('export', 'print'), true);
+    }
+
+    /**
+     * Output-buffer callback for the agent panel: places the board tab
+     * before Tasks in the finished page. osTicket builds the tabs in
+     * StaffNav::getTabs() without a hook, so there is no other way in
+     * without patching the core.
+     */
+    public static function injectStaffNav($buffer)
+    {
+        if (!is_string($buffer) || !defined('OSTSCPINC') || strpos($buffer, '<ul id="nav"') === false) {
+            return $buffer;
+        }
+        $staff = $GLOBALS['thisstaff'] ?? null;
+        if (!($staff instanceof Staff)) {
+            return $buffer;
+        }
+        $active = (bool) preg_match('#^/board/?$#', (string) ($_SERVER['PATH_INFO'] ?? ''))
+            && strtolower(basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''))) === 'ajax.php';
+        $lang = class_exists('Internationalization') ? Internationalization::getCurrentLanguage() : 'en';
+
+        return NavInjector::injectStaff($buffer, ROOT_PATH . self::STAFF_BASE, BoardI18n::strings($lang)['nav'], $active);
     }
 
     /**

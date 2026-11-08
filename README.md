@@ -13,7 +13,7 @@ A Kanban-style board for osTicket. One column per ticket status, sub-tickets fol
 
 | | Agent panel | Client portal |
 |---|---|---|
-| Where | Applications → Board (`/scp/ajax.php/board`), and the panel's start page: after login and on the logo (setting) | "Board" in the portal navigation (`/ajax.php/board`) |
+| Where | "Board" tab before Tasks and Applications → Board (`/scp/ajax.php/board`), and the panel's start page: after login and on the logo (setting) | "Board" in the portal navigation (`/ajax.php/board`) |
 | Which tickets | Exactly what the agent's departments, assignments and referrals allow (`Staff::getTicketsVisibility()`, same as the queues) | Own tickets, organisation tickets if the organisation shares them, collaborations if enabled (same three sources as the portal's ticket list) |
 | Filter | Any queue or saved search of the agent panel, picked above the board, remembered per agent across sessions and browsers | No |
 | Search | Field above the board, filters the cards as you type: ticket number, task number, subject, requester name and email, organisation, department, assignee, team, sub-tickets. `/` jumps into it, `Esc` clears it. With no match, or when the board was cut at its card limit, a link runs the same words through osTicket's ticket search | Same field, over number, subject, department and sub-tickets |
@@ -46,7 +46,7 @@ The search never leaves the browser. Each card carries the text it can be found 
 
 Sub-tickets are read from `ost_ticket.ticket_pid`. That's the column osTicket's merge feature and the common sub-ticket plugins write. No thread entries are loaded, so internal notes can't reach either board.
 
-No core file is patched and no file is copied outside the plugin folder. The plugin uses hooks osTicket 1.18 has: `Application::registerStaffApp()` for the menu entry, the `ajax.scp` and `ajax.client` signals for its routes. The portal navigation entry goes in through an output buffer, because the portal navigation doesn't render registered client apps.
+No core file is patched and no file is copied outside the plugin folder. The plugin uses hooks osTicket 1.18 has: `Application::registerStaffApp()` for the menu entry, the `ajax.scp` and `ajax.client` signals for its routes. The portal navigation entry and the agent panel's "Board" tab go in through an output buffer, because neither navigation has a hook for them.
 
 Why `ajax.php` and not osTicket's `apps/` folder: in 1.18.4 neither app dispatcher can be reached. `apps/dispatcher.php` dies with a fatal error (it requires `client.inc.php` by a path that doesn't resolve from `apps/`), and `scp/apps/dispatcher.php` refuses direct calls and expects an `scp/apps.php` the release doesn't ship.
 
@@ -78,6 +78,7 @@ Short version:
 | Setting | Default | Purpose |
 |---|---|---|
 | Agent board | on | Entry under Applications, routes under `/scp/ajax.php/board` |
+| Agent navigation tab | on | "Board" tab in the agent panel's top navigation, before Tasks. Applications keeps its entry |
 | Board as start page | on | The board replaces the ticket list as the start page (`scp/index.php`): after logging in, on the logo and on the "Agent Panel" link. A login from a link (e.g. a ticket in an alert mail) still opens that link; a pending password change or 2FA step comes first. The Tickets tab still opens the ticket list |
 | Client board | **off** | Read-only board in the portal. Off means the route answers 404 |
 | Client navigation link | on | "Board" in the portal navigation. Off: reachable by URL only |

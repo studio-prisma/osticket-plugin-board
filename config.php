@@ -32,6 +32,15 @@ class BoardConfig extends PluginConfig
                 ),
             )),
 
+            'staff_nav' => new BooleanField(array(
+                'label'         => 'Agent navigation tab',
+                'default'       => true,
+                'configuration' => array(
+                    'desc' => 'Adds a "Board" tab to the agent panel\'s top navigation, '
+                            . 'before Tasks. The entry under Applications stays.',
+                ),
+            )),
+
             'staff_landing' => new BooleanField(array(
                 'label'         => 'Board as start page',
                 'default'       => true,

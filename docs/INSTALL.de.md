@@ -73,7 +73,7 @@ Als **Nicht-Admin**-Testagent:
 | # | Aktion | Erwartet |
 |---|---|---|
 | 4.0 | Abmelden, als Agent neu anmelden; dann den Tab „Tickets", dann das Logo anklicken | Login und Logo öffnen das Board, der Tab „Tickets" die Ticketliste |
-| 4.1 | Agenten-Panel → Applications | Eintrag „Board" |
+| 4.1 | Agenten-Panel: obere Navigation, dann Applications | Reiter „Board" vor „Aufgaben"; unter Applications steht weiter „Board" |
 | 4.2 | Öffnen | Spalten für jeden offenen Status und, sofern nicht abgeschaltet, geschlossene Status |
 | 4.3 | Mit der Ticket-Queue des Agenten vergleichen | Dieselben Tickets, keines aus einer Abteilung ohne Zugriff |
 | 4.4 | Testticket in einen anderen offenen Status ziehen | Meldung „Ticket #… verschoben", Karte bleibt nach Neuladen dort, die Ticket-Historie zeigt den Statuswechsel |

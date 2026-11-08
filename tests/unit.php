@@ -558,6 +558,48 @@ check('buffer: ajax.php only for the board page itself',
     && BoardPlugin::isPortalPath('/ajax.php', '') === false
     && BoardPlugin::isPortalPath('/scp/ajax.php', '/board') === false);
 
+$staffPages = array('/scp/index.php', '/scp/tickets.php', '/support/scp/tasks.php', '/scp/users.php', '/scp/dashboard.php');
+$staffSkip = array('/tickets.php', '/scp/file.php', '/scp/image.php', '/scp/logout.php', '/scp/login.php', '/scp/apps.php', '/api/http.php', '/scp/sub/x.php', '');
+$isStaff = fn($s) => BoardPlugin::isStaffPath($s);
+check('staff buffer: agent pages get it', array_map($isStaff, $staffPages) === array_fill(0, 5, true));
+check('staff buffer: portal, downloads, login, API do not', array_map($isStaff, $staffSkip) === array_fill(0, 9, false));
+check('staff buffer: never under the CLI', BoardPlugin::isStaffPage('/scp/index.php') === false);
+check('staff buffer: no export or print',
+    BoardPlugin::isStaffPath('/scp/tickets.php', '', array('a' => 'export')) === false
+    && BoardPlugin::isStaffPath('/scp/tickets.php', '', array('a' => 'PRINT')) === false
+    && BoardPlugin::isStaffPath('/scp/tickets.php', '', array('a' => array('x'))) === true
+    && BoardPlugin::isStaffPath('/scp/tickets.php', '', array('a' => 'open')) === true);
+check('staff buffer: scp/ajax.php only for the board page itself',
+    BoardPlugin::isStaffPath('/scp/ajax.php', '/board') === true
+    && BoardPlugin::isStaffPath('/scp/ajax.php', '/board/state') === false
+    && BoardPlugin::isStaffPath('/scp/ajax.php', '/tickets/1/preview') === false);
+
+// Markup as include/staff/templates/navigation.tmpl.php writes it.
+$staffNav = "<ul id=\"nav\">\n"
+    . "<li class=\"inactive \"><a href=\"/scp/dashboard.php\">Dashboard</a><ul>\n<li><a class=\"logs\" href=\"/scp/dashboard.php\" title=\"\" id=\"nav0\">Dashboard</a></li>\n</ul>\n\n</li>\n"
+    . "<li class=\"inactive \"><a href=\"/scp/tasks.php\">Aufgaben</a><ul>\n<li><a class=\"Ticket\" href=\"/scp/tasks.php\">Aufgaben</a></li>\n</ul>\n\n</li>\n"
+    . "<li class=\"active \"><a href=\"/scp/tickets.php\">Tickets</a>\n</li>\n"
+    . "</ul>\n<a href=\"/scp/tasks.php\">elsewhere</a>";
+$sOut = NavInjector::injectStaff($staffNav, '/scp/ajax.php/board', 'Board', false);
+$posBoard = strpos($sOut, 'spb-nav');
+check('staff nav: tab placed before Tasks, after Dashboard',
+    $posBoard !== false
+    && $posBoard > strpos($sOut, 'dashboard.php')
+    && $posBoard < strpos($sOut, '<li class="inactive "><a href="/scp/tasks.php">')
+    && strpos($sOut, '<li class="inactive no-pjax"><a class="spb-nav no-pjax" href="/scp/ajax.php/board" title="Ticket Board">Board</a>') !== false);
+check('staff nav: idempotent', NavInjector::injectStaff($sOut, '/scp/ajax.php/board', 'Board', false) === $sOut);
+check('staff nav: active flag and escaping', strpos(NavInjector::injectStaff($staffNav, '/a?"x', '<B>', true),
+    '<li class="active no-pjax"><a class="spb-nav no-pjax" href="/a?&quot;x" title="Ticket Board">&lt;B&gt;</a>') !== false);
+$noTasks = str_replace('/scp/tasks.php', '/scp/x.php', $staffNav);
+$tOut = NavInjector::injectStaff($noTasks, '/b', 'Board', false);
+check('staff nav: without Tasks it goes before Tickets', strpos($tOut, 'spb-nav') < strpos($tOut, '/scp/tickets.php') && strpos($tOut, 'spb-nav') > strpos($tOut, '/scp/x.php'));
+check('staff nav: page without agent nav or without both tabs untouched',
+    NavInjector::injectStaff('<ul><li class="x"><a href="/scp/tasks.php">T</a></li></ul>', '/b', 'B', false) === '<ul><li class="x"><a href="/scp/tasks.php">T</a></li></ul>'
+    && NavInjector::injectStaff('<ul id="nav"><li class="a"><a href="/scp/kb.php">K</a></li></ul>', '/b', 'B', false) === '<ul id="nav"><li class="a"><a href="/scp/kb.php">K</a></li></ul>');
+check('setting: agent navigation tab on by default, can be switched off',
+    BoardController::normalise(array())['staff_nav'] === true
+    && BoardController::normalise(array('staff_nav' => false))['staff_nav'] === false);
+
 // --------------------------------------------------------------- AI Actions
 
 $aiRegistry = new class {
