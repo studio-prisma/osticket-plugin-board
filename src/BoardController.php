@@ -24,6 +24,7 @@ final class BoardController
         'refresh_seconds' => 60,
         'next_after_close' => true,
         'staff_landing'   => true,
+        'staff_nav'       => true,
         'next_to'         => array(),
         'next_from'       => array(),
         'next_from_acts'  => array('status'),
@@ -57,6 +58,7 @@ final class BoardController
             'refresh_seconds' => $refresh <= 0 ? 0 : max(15, min(600, $refresh)),
             'next_after_close' => (bool) ($raw['next_after_close'] ?? true),
             'staff_landing'   => (bool) ($raw['staff_landing'] ?? true),
+            'staff_nav'       => (bool) ($raw['staff_nav'] ?? true),
             'next_to'         => array_map('intval', self::keyList($raw['next_to_statuses'] ?? null, '/^[1-9]\d{0,9}$/')),
             'next_from'       => array_map('intval', self::keyList($raw['next_from_statuses'] ?? null, '/^[1-9]\d{0,9}$/')),
             'next_from_acts'  => self::keyList($raw['next_from_actions'] ?? null, '/^(status|assign|transfer|priority|mark)$/') ?: array('status'),
@@ -123,7 +125,13 @@ final class BoardController
         if (!$nav) {
             $nav = new StaffNav($thisstaff);
         }
+        // The sub-navigation stays the one of Applications (it lists the
+        // board). With the own tab, that tab is highlighted instead.
+        $nav->getTabs();
         $nav->setActiveTab('apps');
+        if (self::$settings['staff_nav'] && isset($nav->tabs['apps'])) {
+            unset($nav->tabs['apps']['active']);
+        }
 
         $s = self::$settings;
         $strings = BoardI18n::strings(self::language());

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-08
+
+### Added
+
+- "Board" tab in the agent panel's top navigation, before Tasks, highlighted while the board is open. Setting "Agent navigation tab", on by default. The entry under Applications stays. osTicket builds these tabs without a hook, so the tab goes into the finished page through an output buffer, the same way as the portal entry; downloads, exports, prints, login and AJAX calls are not buffered.
+
 ## [0.7.0] - 2026-11-07
 
 ### Added

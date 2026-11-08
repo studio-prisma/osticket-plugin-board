@@ -54,6 +54,30 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('own tab in the top navigation, before Tasks; Applications keeps its entry', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.goto('/scp/tickets.php');
+    const tabs = page.locator('#nav > li > a');
+    const labels = (await tabs.allTextContents()).map((t) => t.trim());
+    const board = labels.indexOf('Board');
+    expect(board).toBeGreaterThan(-1);
+    expect(labels[board + 1]).toBe('Tasks');
+    await expect(page.locator('#nav > li > a.spb-nav')).toHaveCount(1);
+    await expect(page.locator('#nav > li.active > a.spb-nav')).toHaveCount(0);
+    // Applications still lists the board in its drop-down.
+    await expect(page.locator('#nav li a[href$="/scp/ajax.php/board"]:not(.spb-nav)')).toHaveCount(1);
+
+    await Promise.all([page.waitForURL(/\/scp\/ajax\.php\/board/), page.locator('#nav > li > a.spb-nav').click()]);
+    await expect(page.locator('.spb-board')).toHaveCount(1);
+    await expect(page.locator('#nav > li.active > a.spb-nav')).toHaveCount(1);
+    await expect(page.locator('#nav > li.active')).toHaveCount(1);
+
+    // A tab loaded via PJAX keeps the tab; an export stays untouched.
+    await Promise.all([page.waitForURL(/\/scp\/tasks\.php/), page.locator('#nav > li > a', { hasText: 'Tasks' }).click()]);
+    await expect(page.locator('#nav > li > a.spb-nav')).toHaveCount(1);
+    expect(errors).toEqual([]);
+  });
+
   test('drag and drop changes the status and survives a reload', async ({ page }) => {
     const errors = watchErrors(page);
     await page.goto('/scp/ajax.php/board');
@@ -242,6 +266,21 @@ test.describe('board as start page', () => {
       await expect(page.locator('.spb-board')).toHaveCount(0);
     } finally {
       sql(`UPDATE ost_staff SET change_passwd=0 WHERE username='${env.SPB_AGENT_USER}'`);
+    }
+  });
+
+  test('navigation tab switched off: only Applications links the board', async ({ page }) => {
+    sql(`INSERT INTO ost_config (namespace, \`key\`, value, updated) VALUES ('${NS}', 'staff_nav', '0', NOW())`);
+    try {
+      await page.goto('/scp/login.php');
+      await login(page, env.SPB_ADMIN_USER, env.SPB_ADMIN_PASS);
+      await page.waitForURL(/\/scp\/ajax\.php\/board/);
+      await expect(page.locator('#nav a.spb-nav')).toHaveCount(0);
+      await page.goto('/scp/tickets.php');
+      await expect(page.locator('#nav a.spb-nav')).toHaveCount(0);
+      await expect(page.locator('#nav a[href$="/scp/ajax.php/board"]')).toHaveCount(1);
+    } finally {
+      sql(`DELETE FROM ost_config WHERE namespace='${NS}' AND \`key\`='staff_nav'`);
     }
   });
 

@@ -13,7 +13,7 @@ Ein Board im Kanban-Stil für osTicket. Eine Spalte pro Ticketstatus, Unter-Tick
 
 | | Agenten-Panel | Kundenportal |
 |---|---|---|
-| Wo | Applications → Board (`/scp/ajax.php/board`), und die Startseite des Panels: nach dem Login und über das Logo (Einstellung) | „Board" in der Portal-Navigation (`/ajax.php/board`) |
+| Wo | Reiter „Board" vor „Aufgaben" und Applications → Board (`/scp/ajax.php/board`), und die Startseite des Panels: nach dem Login und über das Logo (Einstellung) | „Board" in der Portal-Navigation (`/ajax.php/board`) |
 | Welche Tickets | Genau das, was Abteilungen, Zuweisungen und Weiterleitungen des Agenten erlauben (`Staff::getTicketsVisibility()`, wie in den Queues) | Eigene Tickets, Tickets der Organisation, wenn die Organisation sie teilt, und Mitwirkungen, wenn aktiviert (dieselben drei Quellen wie die Ticketliste im Portal) |
 | Filter | Jede Queue und gespeicherte Suche des Agenten-Panels, über dem Board auswählbar, pro Agent gemerkt, über Sitzungen und Browser hinweg | Nein |
 | Suche | Feld über dem Board, filtert die Karten beim Tippen: Ticketnummer, Aufgabennummer, Betreff, Name und Mail der anfragenden Person, Organisation, Abteilung, Zuweisung, Team, Unter-Tickets. `/` springt hinein, `Esc` leert es. Ohne Treffer oder wenn das Board am Kartenlimit abgeschnitten wurde, schickt ein Link dieselben Wörter an die Ticketsuche von osTicket | Dasselbe Feld, über Nummer, Betreff, Abteilung und Unter-Tickets |
@@ -46,7 +46,7 @@ Die Suche verlässt den Browser nicht. Jede Karte trägt den Text, über den sie
 
 Unter-Tickets kommen aus `ost_ticket.ticket_pid`. In diese Spalte schreiben die Merge-Funktion von osTicket und die gängigen Unter-Ticket-Plugins. Thread-Einträge werden nie geladen, interne Notizen können also auf keinem der beiden Boards landen.
 
-Keine Core-Datei wird verändert, keine Datei landet außerhalb des Plugin-Ordners. Das Plugin nutzt Hooks, die osTicket 1.18 mitbringt: `Application::registerStaffApp()` für den Menüeintrag, die Signale `ajax.scp` und `ajax.client` für seine Routen. Den Navigationseintrag im Portal setzt ein Output-Buffer, weil die Portal-Navigation registrierte Client-Apps nicht anzeigt.
+Keine Core-Datei wird verändert, keine Datei landet außerhalb des Plugin-Ordners. Das Plugin nutzt Hooks, die osTicket 1.18 mitbringt: `Application::registerStaffApp()` für den Menüeintrag, die Signale `ajax.scp` und `ajax.client` für seine Routen. Den Navigationseintrag im Portal und den Reiter „Board" im Agenten-Panel setzt ein Output-Buffer, weil keine der beiden Navigationen dafür einen Hook hat.
 
 Warum `ajax.php` und nicht der `apps/`-Ordner von osTicket: In 1.18.4 ist keiner der beiden App-Dispatcher erreichbar. `apps/dispatcher.php` bricht mit einem Fatal Error ab (es lädt `client.inc.php` über einen Pfad, der aus `apps/` heraus nicht auflöst), und `scp/apps/dispatcher.php` verweigert direkte Aufrufe und erwartet eine `scp/apps.php`, die das Release nicht mitliefert.
 
@@ -78,6 +78,7 @@ Kurzfassung:
 | Einstellung | Standard | Zweck |
 |---|---|---|
 | Agent board | an | Eintrag unter Applications, Routen unter `/scp/ajax.php/board` |
+| Agent navigation tab | an | Reiter „Board" in der oberen Navigation des Agenten-Panels, vor „Aufgaben". Der Eintrag unter Applications bleibt |
 | Board as start page | an | Das Board ersetzt die Ticketliste als Startseite (`scp/index.php`): nach dem Login, über das Logo und über den Link „Agent Panel". Ein Login über einen Link (z. B. ein Ticket aus einer Benachrichtigung) öffnet weiter diesen Link; ein ausstehender Passwortwechsel oder 2FA-Schritt kommt zuerst. Der Tab „Tickets" öffnet weiter die Ticketliste |
 | Client board | **aus** | Board nur zum Lesen im Portal. Aus heißt: die Route antwortet mit 404 |
 | Client navigation link | an | „Board" in der Portal-Navigation. Aus: nur per URL erreichbar |

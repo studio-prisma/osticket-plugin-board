@@ -50,7 +50,7 @@ Documented design decisions are not findings.
 - **Ticket numbers and subjects on the agent board** for every ticket the agent's queues already list.
 - **Search text in the page source.** Each card carries the words it can be found by, taken from fields the same viewer already sees on the card, in the quick view or in the ticket view (for agents: requester email, task numbers and titles).
 - **Team names in the team filter.** Every assignment menu of the agent panel lists them.
-- **The output buffer on portal pages.** It's how the navigation entry gets in without a core patch. It is skipped for downloads, the API, AJAX and the agent panel.
+- **The output buffers on portal and agent pages.** They're how the navigation entries get in without a core patch. They are skipped for downloads, the API and AJAX, and on agent pages also for login, exports and prints. The agent tab is only added for a signed-in agent and only links to the board, which checks access itself.
 - **Bugs in osTicket itself**, including its visibility rules. Report those [upstream](https://github.com/osTicket/osTicket/security).
 - Anything that requires admin access to osTicket or write access to the server.
 - Missing rate limits on the board page. osTicket has none on its own ticket lists either; that belongs in front of the application.

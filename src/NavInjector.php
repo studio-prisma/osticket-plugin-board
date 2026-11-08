@@ -42,4 +42,42 @@ final class NavInjector
 
         return substr($html, 0, $end) . $item . substr($html, $end);
     }
+
+    /**
+     * Agent panel: the tab goes before Tasks (falling back to Tickets), in
+     * the markup of include/staff/templates/navigation.tmpl.php. The tabs
+     * carry their own drop-down lists, so the end of <ul id="nav"> can't be
+     * found by the first </ul>; the anchor is the tab's own link instead.
+     * Without either tab the page stays untouched.
+     */
+    public static function injectStaff(string $html, string $href, string $label, bool $active): string
+    {
+        if (strpos($html, self::MARKER) !== false) {
+            return $html;
+        }
+        $nav = strpos($html, '<ul id="nav"');
+        if ($nav === false) {
+            return $html;
+        }
+        $at = false;
+        foreach (array('tasks', 'tickets') as $tab) {
+            if (preg_match('#<li class="[^"]*">\s*<a href="[^"]*/scp/' . $tab . '\.php"#', $html, $m, PREG_OFFSET_CAPTURE, $nav)) {
+                $at = $m[0][1];
+                break;
+            }
+        }
+        if ($at === false) {
+            return $html;
+        }
+
+        $item = sprintf(
+            '<li class="%s no-pjax"><a class="%s no-pjax" href="%s" title="Ticket Board">%s</a>' . "\n</li>\n",
+            $active ? 'active' : 'inactive',
+            self::MARKER,
+            htmlspecialchars($href, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($label, ENT_QUOTES, 'UTF-8')
+        );
+
+        return substr($html, 0, $at) . $item . substr($html, $at);
+    }
 }
